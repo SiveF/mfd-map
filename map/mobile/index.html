@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="MFD MAP">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>MFD MAP</title>
+<!-- Palett, font, kompass, skalstock och DIAG ur datorns stilmallar - ingen kopia -->
+<link rel="stylesheet" href="../../ui/layout.css">
+<link rel="stylesheet" href="../../ui/style.css">
+<link rel="stylesheet" href="../map.css">
+<link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+  <div id="m-app">
+    <div id="m-stage">
+      <canvas id="m-map"></canvas>
+      <!-- Laddning overst, koordinater (kartans mitt + min position), kompass -->
+      <div id="m-load"><div id="m-load-bar"></div></div>
+      <div id="m-hud"><div id="m-center"></div><div id="m-pos"></div></div>
+      <div id="map-compass">
+        <svg viewBox="-50 -50 100 100" width="72" height="72">
+          <g id="map-compass-rot">
+            <circle r="40" class="cr-ring"/>
+            <path d="M0,-40 L0,-34 M40,0 L34,0 M0,40 L0,34 M-40,0 L-34,0" class="cr-tick"/>
+            <polygon points="0,-36 8,0 -8,0" class="cr-north"/>
+            <polygon points="0,36 8,0 -8,0" class="cr-south"/>
+            <text x="0" y="-44" class="cr-n">N</text>
+          </g>
+        </svg>
+        <div id="map-compass-up"></div>
+      </div>
+      <div id="m-lower">
+        <!-- Skalstock + kartleverantor -->
+        <div id="m-foot">
+          <div id="map-scale"><span id="map-scale-txt"></span><div id="map-scale-bar"></div></div>
+          <div id="map-src"></div>
+        </div>
+        <!-- Vald punkt: namn, koordinat, hojd, avstand + baring fran min position -->
+        <div id="m-point" hidden></div>
+      </div>
+      <!-- Helskarmspanel (MAP, LIST, OLAT, GOTO, MENU, DIAG) -->
+      <div id="m-panel" hidden></div>
+    </div>
+    <div id="m-bar"></div>
+  </div>
+  <input id="m-file" type="file" accept=".json,application/json" hidden>
+
+<!-- DIAG forst: fangar aven fel under uppstarten. Aldrig config.js, store.js eller map/data/ -->
+<script src="../diag.js"></script>
+<script src="../sources.js"></script>
+<script src="../mapview.js"></script>
+<script src="../layers.js"></script>
+<script src="../vtiles.js"></script>
+<script src="../coords.js"></script>
+<script src="../scale.js"></script>
+<script src="../tools.js"></script>
+<script src="../draw.js"></script>
+<script src="../lists.js"></script>
+<script src="../marks.js"></script>
+<script src="../export.js"></script>
+<script src="touch.js"></script>
+<script src="gps.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

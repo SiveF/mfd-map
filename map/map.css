@@ -1,0 +1,257 @@
+/* map/map.css - BARA kartinnehall. Geometri ur tokens i ui/layout.css,
+   farger BARA ur MFDsystems palett (--c-*, --bg, --green-dim, --green-rgb i
+   ui/layout.css) - inga egna fargvarden. Inga radier (*-regeln i style.css). */
+
+/* ===== Skrivbordslayout (16:9, logiskt 2560x1440) =========================
+   Galler BARA den fristaende kartan (body.map-mode) - ui/layout.css och
+   MFD-panelernas 640-geometri rors inte. Antalet slots (--n-top/--n-side)
+   satts av map/osb.js ur MAP_CONFIG.layout. */
+body.map-mode{
+  --mw:2560px; --mh:1440px;
+  --m-bezel:64px;               /* kantbandet for over-/underraden */
+  --m-margin:110px;             /* marginal mot sidorna for over-/underraden */
+  --osb-w:100px; --osb-h:52px; --osb-font:22px;
+  --osb-ind-w:60px; --osb-ind-h:26px;
+}
+body.map-mode #mfd, body.map-mode .ds-mainex, body.map-mode #osb-layer{ width:var(--mw); height:var(--mh); }
+body.map-mode #mfd{ --pitch-x:calc((var(--mw) - 2 * var(--m-margin)) / var(--n-top));
+                    --pitch-y:calc((var(--mh) - 2 * var(--m-bezel)) / var(--n-side)); }
+body.map-mode .osb-top, body.map-mode .osb-bottom{
+  left:calc(var(--m-margin) + var(--pitch-x) * (var(--i) + .5) - var(--osb-w) / 2);
+}
+body.map-mode .osb-top{    top:calc((var(--m-bezel) - var(--osb-h)) / 2); }
+body.map-mode .osb-bottom{ top:calc(var(--mh) - var(--m-bezel) + (var(--m-bezel) - var(--osb-h)) / 2); }
+body.map-mode .osb-left, body.map-mode .osb-right{
+  top:calc(var(--m-bezel) + var(--pitch-y) * (var(--i) + .5) - var(--osb-h) / 2);
+}
+body.map-mode .osb-right{ left:calc(var(--mw) - var(--osb-w)); }
+
+#map-canvas{ display:block; width:var(--mw); height:var(--mh); }
+
+/* Pekare: SAMMA harkors som WTHR-sidan (ui/style.css), och BARA den - ingen
+   klickhand pa knappar, ingen textmarkor. */
+body.map-mode, body.map-mode *{ cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='21' height='21'%3E%3Cg stroke-linecap='square'%3E%3Cpath d='M10.5 1v6M10.5 14v6M1 10.5h6M14 10.5h6' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M10.5 1v6M10.5 14v6M1 10.5h6M14 10.5h6' stroke='%23fff' stroke-width='2'/%3E%3C/g%3E%3C/svg%3E") 10 10, crosshair !important; }
+
+/* OSB-lagret tacker hela displayen - slapp igenom musen till kartan,
+   men lat sjalva slotsen ta emot klick. */
+body.map-mode #osb-layer{ pointer-events:none; }
+body.map-mode .osb{ pointer-events:auto; }
+body.map-mode .osb.empty{ pointer-events:none; }
+
+/* ---- Dropdown (OSB-typ, map/osb.js). Svart ruta med vit ram som omsluter
+   knappen OCH alternativen. Rutan ligger under OSB-lagret (knappens text syns
+   i den), listan ovanpa. Aktivt alternativ = vit platta + svart text, som
+   tryckindikatorn. Ingen hover-grafik. Positionerna satts av osb.js. ---- */
+.osb-dd{
+  position:absolute; z-index:2; background:var(--bg);
+  border:2px solid var(--green);
+}
+.osb-dd-list{ position:absolute; z-index:4; }
+.osb-dd-item{
+  font-size:var(--osb-font); line-height:1.1; letter-spacing:1px;
+  white-space:normal; overflow-wrap:anywhere;     /* radbryt i stallet for bredare ruta */
+  padding:8px 4px; text-align:center;
+}
+.osb-dd-item.on{ background:var(--c-white); color:var(--bg); }
+/* Rad-variant (below): alternativen sida vid sida, lika breda; beskrivningen smatt under */
+.osb-dd-list.row{ display:flex; }
+.osb-dd-list.row .osb-dd-item{ flex:1 1 0; min-width:0; }
+.osb-dd-item small{ display:block; font-size:10px; letter-spacing:0; margin-top:4px; overflow-wrap:normal; }
+
+/* ---- Nere till hoger, ovanfor underraden: laddningsbar med siffra over,
+   koordinaterna under. Hogerkant i linje med hogerkolumnens innerkant. ---- */
+#map-status{
+  position:absolute; z-index:2; pointer-events:none;
+  right:calc(var(--osb-w) + 24px); bottom:calc(var(--m-bezel) + 14px);
+  display:flex; flex-direction:column; align-items:flex-end; gap:6px;
+}
+#map-load{ width:320px; text-align:right; }
+#map-load[hidden]{ display:none; }
+#map-load-num{
+  font-size:18px; letter-spacing:1px; margin-bottom:4px;
+  -webkit-text-stroke:2px var(--bg); paint-order:stroke fill;
+}
+#map-coords{ display:flex; gap:28px; }
+#map-active{
+  font-size:24px; letter-spacing:1px; white-space:nowrap; color:var(--c-blue);
+  -webkit-text-stroke:2px var(--bg); paint-order:stroke fill;
+}
+#map-active:empty{ display:none; }
+#map-active{ pointer-events:auto; }                 /* klick = kopiera koordinaten */
+#map-active.copied{ background:var(--c-white); color:var(--bg); -webkit-text-stroke:0; }
+#map-coord{
+  font-size:24px; letter-spacing:1px; white-space:nowrap; color:var(--green);
+  -webkit-text-stroke:2px var(--bg); paint-order:stroke fill;
+}
+/* Skalstock: fast langd (satts av app.js ur MAP_CONFIG.scale.bar), varde till vanster.
+   '*' framfor vardet = ungefarlig skala (zoomen ligger mellan skalstegen). */
+#map-scale{ display:flex; align-items:flex-end; gap:12px; }
+#map-scale-txt{
+  font-size:20px; letter-spacing:1px; line-height:1;
+  -webkit-text-stroke:2px var(--bg); paint-order:stroke fill;
+}
+#map-scale-bar{ height:12px; border:3px solid var(--green); border-top:0; }
+/* Kartleverantor (attribution kravs av tile-kallan) */
+#map-src{
+  font-size:14px; color:var(--green-dim);
+  -webkit-text-stroke:2px var(--bg); paint-order:stroke fill;
+}
+
+/* ---- OSB-tillstand (map/osb.js) ---- */
+/* Kvittens: hela knappen vit en kort stund (LIST efter SAVE) */
+.osb.flash{ background:var(--c-white); }
+.osb.flash .lbl, .osb.flash .submode{ color:var(--bg); -webkit-text-stroke:2px var(--c-white); }
+/* Hall-in-knapp (SAVE MAP): blinkar vitt medan den halls */
+.osb.hold, .osb.hold .lbl, .osb.hold .submode{ animation:osb-blink .4s steps(1) infinite; }
+@keyframes osb-blink{ 50%{ background:var(--c-white); color:var(--bg); -webkit-text-stroke-color:var(--c-white); } }
+.osb.hold .lbl, .osb.hold .submode{ background:none !important; }
+/* Aktivt fel: gul platta (DIAG). Svart text, outline i plattans farg - som GHPC:s ARM. */
+.osb.warn{ background:var(--c-yellow); }
+.osb.warn .lbl, .osb.warn .submode{ color:var(--bg); -webkit-text-stroke:2px var(--c-yellow); }
+
+/* ===== WindowNormal (map/window.js) - STANDARDFONSTRET =====================
+   600x600, svart, vit ram. Rubrik overst till vanster, gra kvadrat (greppet)
+   overst till hoger. Andra inte per fonster - gor en ny modul om ett annat
+   format behovs. Se README "Design: WindowNormal". */
+body.map-mode{ --win-w:600px; --win-h:600px; --win-head:44px; --win-grip:18px; --win-foot:60px; }
+.win-normal{
+  position:absolute; z-index:3; width:var(--win-w); height:var(--win-h);
+  /* --win-opct = WNDW OPCT i OPTN (bakgrunden; text och ram alltid fulla) */
+  background:color-mix(in srgb, var(--bg) var(--win-opct, 100%), transparent); border:2px solid var(--c-white);
+  display:flex; flex-direction:column;
+}
+.win-normal[hidden]{ display:none; }
+.win-head{
+  flex:none; height:var(--win-head); padding:0 12px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.win-title{ font-size:var(--osb-font); letter-spacing:1px; }
+.win-grip{ width:var(--win-grip); height:var(--win-grip); background:var(--green-dim); }
+.win-body{ flex:1; overflow:auto; padding:0 12px 12px; position:relative; }
+/* Dubbelpil nere till hoger: det finns mer att rulla till */
+.win-more{
+  position:absolute; right:14px; bottom:calc(var(--win-foot) + 4px); z-index:2;
+  color:var(--c-white); pointer-events:none; line-height:0;
+}
+.win-more[hidden]{ display:none; }
+/* Foten: 5 OSB-platser, 1 langst till vanster - 5 langst till hoger, jamnt fordelade */
+.win-foot{ flex:none; position:relative; height:var(--win-foot); }
+.win-normal .wosb{
+  z-index:2;
+  left:calc(var(--win-w) / 5 * (var(--i) + .5) - var(--osb-w) / 2);
+  top:calc((var(--win-foot) - var(--osb-h)) / 2);
+  justify-content:flex-end;                     /* nedre kant, som underraden */
+}
+.win-normal .wosb .osb-ind{ top:auto; bottom:calc((1em - var(--osb-ind-h)) / 2); }
+
+/* Dropdown inne i ett fonster: rutan under anchorn (namnrutan/fonster-OSB),
+   listan over. Anchorn lyfts darfor upp ett lager. */
+.win-normal .osb-dd{ z-index:1; }
+.win-normal .osb-dd-list{ z-index:3; }
+.win-normal .ls-name{ position:relative; z-index:2; }
+
+/* ---- LIST-innehall (map/lists.js) ---- */
+.ls-name{ display:inline-block; min-width:160px; padding:6px 0; font-size:20px; letter-spacing:1px; min-height:34px; }
+.ls-row{ display:flex; align-items:center; gap:14px; padding:5px 0; font-size:18px; letter-spacing:1px; }
+.ls-no{ flex:none; width:52px; text-align:right; color:var(--green-dim); }   /* bred marginal: ruttnumret hanger dar */
+.ls-pt{ flex:none; width:128px; white-space:nowrap; }          /* max 10 tecken */
+/* Aktiv punkt: bla. Ovriga flervalda: grona (som ringarna pa kartan). */
+.ls-row.sel, .ls-row.sel .ls-no{ color:var(--c-blue); }
+.ls-row.multi, .ls-row.multi .ls-no{ color:var(--c-green); }
+.ls-row.sel .ls-sec, .ls-row.sel .grab{ border-color:var(--c-blue); }
+.ls-crd{ display:flex; gap:6px; white-space:nowrap; }
+/* EDIT: rutor runt koordinatens sektioner (klick = andra) och runt numret (dra = flytta) */
+.ls-sec{ border:1px solid var(--c-white); padding:3px 6px; }
+.ls-id{ position:relative; }
+.ls-id.grab, .ls-rt.grab{ border:1px solid var(--c-white); padding:3px 4px; }
+/* Ruttnummer (inom parentes): hanger till vanster om numret, i marginalen - raden flyttas inte */
+.ls-rt{ position:absolute; right:100%; top:50%; transform:translateY(-50%); margin-right:4px;
+        font-size:14px; letter-spacing:0; white-space:nowrap; }
+.ls-rt.grab{ padding:2px 3px; margin-right:6px; }
+/* Markhojd langst till hoger */
+.ls-h{ margin-left:auto; flex:none; white-space:nowrap; color:var(--green-dim); }
+.ls-row.sel .ls-h{ color:var(--c-blue); }
+/* Flytt i listan: gamla platsen gra tills man slapper */
+.ls-row.ghost, .ls-row.ghost *{ color:var(--green-dim) !important; border-color:var(--green-dim) !important; }
+/* ---- Textinmatning (map/input.js): egen blockmarkor, vit markering ---- */
+.inp-wrap{ position:relative; display:inline-block; }
+.inp{
+  font:inherit; letter-spacing:inherit; color:var(--c-white); background:var(--bg);
+  border:1px solid var(--c-white); padding:3px 6px; outline:none; margin:0;
+  caret-color:transparent;                      /* webblasarens markor dold - vi ritar en egen */
+}
+.inp::selection{ background:var(--c-white); color:var(--bg); }
+.inp-caret{ position:absolute; background:var(--c-white); pointer-events:none; mix-blend-mode:difference; }
+.inp-caret[hidden]{ display:none; }
+
+/* ---- DIAG-innehall (map/diag.js) ---- */
+.dg-row{ display:grid; grid-template-columns:90px 48px 1fr; gap:10px; padding:5px 0; font-size:15px; }
+.dg-st{ color:var(--green-dim); }
+.dg-fail .dg-code, .dg-fail .dg-st{ color:var(--c-yellow); }
+.dg-detail{ grid-column:1 / -1; padding-left:148px; font-size:13px; color:var(--c-yellow); overflow-wrap:anywhere; }
+/* Rullist i fonster: tunn, i paletten (inte webblasarens standard) */
+.win-body::-webkit-scrollbar{ width:8px; }
+.win-body::-webkit-scrollbar-track{ background:var(--bg); }
+.win-body::-webkit-scrollbar-thumb{ background:var(--green-dim); }
+
+/* ---- Menyfonster (BASE, LAYR - map/menus.js): rubriker + knappar i kolumner ---- */
+.mn-cols{ display:grid; gap:24px; }
+.mn-head{
+  font-size:15px; letter-spacing:2px; color:var(--green-dim);
+  border-bottom:1px solid var(--green-dim); padding:10px 0 4px; margin-bottom:6px;
+}
+.mn-btn{ font-size:20px; letter-spacing:1px; padding:6px 8px; }
+.mn-btn.on{ background:var(--c-white); color:var(--bg); }      /* vald / pa = vit platta */
+
+/* ---- Chevron-etiketter (dimmern pa 21/22): samma pil som RADAR/WTHR SCALE ---- */
+body.map-mode .osb .lbl svg{ display:block; transform:translateY(8px); }
+/* Dimmervardet mellan chevronerna (som VOL pa MEDIA-sidan) */
+#map-dim, .map-val{
+  position:absolute; z-index:3; transform:translate(-50%, -50%); pointer-events:none; text-align:center;
+  font-size:var(--osb-font); letter-spacing:1px; color:var(--green);
+  -webkit-text-stroke:2px var(--bg); paint-order:stroke fill;
+}
+#map-dim[hidden], .map-val[hidden]{ display:none; }
+.map-val small{ display:block; font-size:14px; color:var(--green-dim); }   /* vems ljusstyrka (GOK) */
+
+/* Textinmatning direkt pa kartan (DRAW TEXT) - placeras av draw.js */
+.dr-text{ position:absolute; z-index:4; transform:translateY(-50%); font-size:22px; letter-spacing:1px; }
+
+/* LIST/OLEAT-huvudet: namn + knappar pa en rad, utan rutor. Tunn vit linje mot listan.
+   DEL blinkar (vit platta) medan den halls (2 s = raderad). */
+.ls-head{ display:flex; align-items:center; gap:24px; border-bottom:1px solid var(--c-white); margin-bottom:12px; }
+.ls-del.hold{ animation:ls-blink .4s steps(1) infinite; }
+@keyframes ls-blink{ 50%{ background:var(--c-white); color:var(--bg); } }
+
+/* OLEAT-rader: typ i figurens farg, sedan matt */
+.ol-type{ flex:none; width:60px; }
+.ol-info{ white-space:nowrap; color:var(--green-dim); }
+.ls-row.sel .ol-info{ color:var(--c-blue); }
+/* MULTI: avdelning per oleat - tunn linje + namn; arbetsoleaten (far nya figurer) bla */
+.ol-sep{ border-top:1px solid var(--c-white); margin-top:10px; padding:6px 0 2px; font-size:16px; letter-spacing:1px; color:var(--green-dim); }
+.ol-sep:first-child{ margin-top:0; }
+.ol-sep.pri{ color:var(--c-blue); }
+/* GOTO */
+/* GOTO: bara en textruta, centrerad under knappen (placeras av app.js) */
+#map-goto{ position:absolute; z-index:4; transform:translateX(-50%); background:var(--bg); }
+#map-goto[hidden]{ display:none; }
+.gt-field{ display:inline-block; min-width:400px; font-size:22px; letter-spacing:1px; padding:6px 8px; border:1px solid var(--c-white); }
+
+/* Kompassros (vriden karta). Klick = norr upp. Farger ur paletten. */
+#map-compass{
+  position:absolute; z-index:3; right:calc(var(--osb-w) + 40px); top:calc(var(--m-bezel) + 30px);
+  text-align:center;
+}
+#map-compass[hidden]{ display:none; }
+#map-compass svg{ display:block; overflow:visible; }
+.cr-ring{ fill:none; stroke:var(--c-white); stroke-width:2; paint-order:stroke; }
+.cr-tick{ stroke:var(--c-white); stroke-width:2; }
+.cr-north{ fill:var(--c-red); stroke:var(--bg); stroke-width:1.5; }
+.cr-south{ fill:var(--bg); stroke:var(--c-white); stroke-width:1.5; }
+.cr-n{ fill:var(--c-white); font-size:14px; text-anchor:middle; stroke:var(--bg); stroke-width:3; paint-order:stroke fill; }
+#map-compass-up{ font-size:18px; letter-spacing:1px; -webkit-text-stroke:2px var(--bg); paint-order:stroke fill; }
+
+/* Knappar i huvudet (DEL, NEW, SKETCH): bara text. Pa (SKETCH synlig) = bla. */
+.ls-btn{ display:inline-block; padding:6px 4px; font-size:20px; letter-spacing:1px; }
+.ls-btn.on{ color:var(--c-blue); }
+.ls-btn.right{ margin-left:auto; }                 /* RTE langst till hoger i huvudet */

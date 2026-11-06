@@ -1,0 +1,279 @@
+/* =====================================================================
+   layout.css  -  SINGLE SOURCE OF TRUTH for MFD:ns layout och farger.
+
+   Ingen sida och ingen vy far definiera egna skarmkoordinater. Allt
+   harleds ur tokens harunder - andra --bezel eller --osb-w pa ETT stalle
+   och hela panelen flyttar sig.
+
+   Laddas FORE style.css (som bara stylar innehallet i varje vy).
+
+   SLOTS
+     DsMain      540x540  centrerad          -> .ds-main
+     DsMainEX    640x640  hela displayen     -> .ds-mainex
+     DsCornerTL/TR/BL/BR  70x70 i hornen     -> .ds-corner-*
+     OSBslot0-19 46x30 runt kanten           -> .osb + .osb-<sida> + --i
+
+   GEOMETRI (harledd, verifierat overlappsfri)
+     Kantband 50 px. OSB-centrum = bezel + pitch*(i+0.5) = 104/212/320/428/536.
+     Slotsen ar smalare an delningen, sa 70x70-hornen krockar aldrig.
+
+   Se docs/ui-layout.md.
+   ===================================================================== */
+
+:root{
+  /* ---- Palett (punkt 7) - skapa INGA nya fargvarianter ---- */
+  --c-white:#ffffff;
+  --c-red:#e60000;
+  --c-yellow:#fff200;
+  --c-green:#09ff00;
+  --c-blue:#00f2ff;
+  --c-magenta:#ff00d9;
+
+  /* TEMAFARGEN = VIT. Namnen --green/--green-rgb/--green-dim ar historiska
+     och behalls for att ui/radar.js laser dem via getComputedStyle - att doopa
+     om dem vore en orelaterad refaktorering. Fargcyklingen (COLOR-knappen) ar
+     borttagen, sa detta ar ett FAST varde: byt har for att byta huvudfarg.
+     --green-dim = 50 % av temafargen (etiketter/siffror/ramar). */
+  --green:var(--c-white);
+  --green-rgb:255,255,255;
+  --green-dim:rgb(128,128,128);
+  --bg:#000000;
+
+  /* ---- Display + slots ---- */
+  --disp:640px;
+  --bezel:50px;                 /* kantbandet dar OSB:erna sitter */
+  --ds-main:540px;              /* = disp - 2*bezel */
+  --ds-corner:70px;
+  --ds-pad:10px;                /* innermarginal i DsMain */
+
+  /* ---- OSB ---- */
+  /* Slotens yta = markeringsramen = den fargade plattan.
+     Bredden ar INTE langre takad av kantbandet: sidokolumnerna ankras numera i
+     skarmkanten (left:0 / right:0) istallet for att centreras i bandet, sa de
+     far vara bredare an --bezel. Det de da vaxer in over ar DsMains ytterkant,
+     dar ingen vy har innehall (--ds-pad haller undan det).
+     Hojden: tva textrader ar 2 x 17 px + 2 px ram = 36, sa 40 ger bada raderna
+     plats med 2 px over. Vid 30 skar ramen genom rad 2. */
+  --osb-w:56px;
+  --osb-h:40px;
+  --osb-font:17px;              /* BADA raderna - rad 2 ar lika stor som rad 1 */
+  /* Delning mellan OSB-centrum. Rader och kolumner har EGNA varden: den
+     fysiska knappdelningen ar inte densamma i sid- som i hojdled.
+       X (topp/botten) - raden centreras kring displayens mitt.
+       Y (vanster/hoger) - kolumnen ankras i NEDERSTA sloten (OSB 9 och 15) och
+         vaxer uppat, sa den krymper mot botten nar pitch minskar.
+         Tumregel: 1 px mindre pitch-y = 4 px lagre for oversta sloten (5/19). */
+  --osb-pitch-x:100px;
+  --osb-pitch-y:96px;
+  --osb-y-anchor:520px;         /* centrum for OSB 9 / 15 - flyttar hela kolumnen */
+  --osb-ind-w:40px;             /* vit indikator vid knapptryck */
+  --osb-ind-h:20px;
+
+  /* ---- ProgBar ---- */
+  --pb-h:8px;                   /* standard */
+  --pb-h-thin:3px;              /* MEDIA/OSC-varianten */
+}
+
+/* ===== Rot ============================================================ */
+#mfd{ position:relative; width:var(--disp); height:var(--disp); overflow:hidden; }
+
+/* ===== Data Slots ===================================================== */
+.ds{ position:absolute; }
+.ds-mainex{ left:0; top:0; width:var(--disp); height:var(--disp); z-index:0; }
+.ds-main{
+  left:var(--bezel); top:var(--bezel);
+  width:var(--ds-main); height:var(--ds-main);
+  z-index:1;
+  border:1px solid var(--green-dim);
+}
+/* Hornen ar POSITIONERINGSCONTAINRAR. De ligger kant-i-kant med fonstret,
+   sa innehall som ankras mot samma horn behaller exakt sina pixelvarden.
+   overflow:visible - sliders sticker ut nagra px utanfor 70x70. */
+.ds-corner{ width:var(--ds-corner); height:var(--ds-corner); overflow:visible; z-index:2; }
+.ds-corner-tl{ left:0; top:0; }
+.ds-corner-tr{ left:calc(var(--disp) - var(--ds-corner)); top:0; }
+.ds-corner-bl{ left:0; top:calc(var(--disp) - var(--ds-corner)); }
+.ds-corner-br{ left:calc(var(--disp) - var(--ds-corner)); top:calc(var(--disp) - var(--ds-corner)); }
+
+/* ===== OSB-slots ====================================================== */
+#osb-layer{ position:absolute; left:0; top:0; width:var(--disp); height:var(--disp); z-index:3; }
+
+.osb{
+  position:absolute;
+  width:var(--osb-w); height:var(--osb-h);
+  /* Texten ankras mot OVERKANTEN men centreras vagratt kring slotens
+     lodrata mittlinje. Vore den centrerad aven lodratt skulle rad 1 hoppa
+     uppat sa fort en rad 2 dyker upp (jfr AFK/OFF mot VOL) - knapparna
+     skulle da inte ligga i linje med varandra. */
+  display:flex; flex-direction:column; align-items:center;
+  /* justify-content satts per SIDA harunder - texten orienteras mot den
+     skarmkant sloten sitter narmast. */
+  text-align:center;
+  border:1px solid transparent;
+  overflow:visible;             /* rad 2 och S-rader far spilla ut nedat */
+}
+/* Positionen raknas HELT ur tokens + --i (0-4), som components.js satter. */
+.osb-top,.osb-bottom{
+  left:calc(var(--disp) / 2 + var(--osb-pitch-x) * (var(--i) - 2) - var(--osb-w) / 2);
+}
+/* i = 4 ar den NEDERSTA sloten i bada kolumnerna (hoger 5-9, vanster 19-15),
+   dvs OSB 9 respektive 15. Den ligger stilla pa --osb-y-anchor; de ovanfor
+   dras nedat nar --osb-pitch-y minskar. */
+.osb-left,.osb-right{
+  top:calc(var(--osb-y-anchor) + var(--osb-pitch-y) * (var(--i) - 4) - var(--osb-h) / 2);
+}
+.osb-top{    top:calc((var(--bezel) - var(--osb-h)) / 2); }
+.osb-bottom{ top:calc(var(--disp) - var(--bezel) + (var(--bezel) - var(--osb-h)) / 2); }
+/* Ankrade i skarmkanten, inte centrerade i kantbandet - sa slotbredden kan
+   overstiga --bezel utan att hamna utanfor displayen. */
+.osb-left{   left:0; }
+.osb-right{  left:calc(var(--disp) - var(--osb-w)); }
+
+/* TEXTORIENTERING EFTER NARMASTE SKARMKANT.
+   Overraden mot overkanten, underraden mot underkanten, kolumnerna centrerade.
+   Tryckindikatorn foljer samma orientering (se .osb-ind langre ner) - annars
+   skulle den hamna pa fel stalle nar texten inte langre ar toppankrad. */
+.osb-top    { justify-content:flex-start; }
+.osb-bottom { justify-content:flex-end; }
+.osb-left, .osb-right{ justify-content:center; }
+
+.osb.current{ border-color:var(--green); background:rgba(var(--green-rgb),.13); }
+.osb.empty .lbl{ color:var(--green-dim); opacity:.35; }
+/* TOGGLE PA (av/pa-funktioner): svart text i en vit ifylld ruta runt BARA
+   texten. Satts av setPage (data.on) eller window.setOn(n, pa). Flerlagestogglar
+   (ORI NUP/TRUE m.fl.) visar i stallet laget pa rad 2 (submode). */
+.osb.on .lbl{ display:inline-block; background:var(--green); color:#000;
+  -webkit-text-stroke:0.7px #000; padding:3px 3px 0; top:-2px; }
+/* svart kontur = lite tjockare text. Padding + top:-2px flyttar RUTAN 2 px upp
+   medan texten star kvar (glyferna sitter lagt i radhojden). */
+/* Tva rader (rad 2 = submode): EN vit ruta over hela sloten, bada raderna svarta. */
+.osb.on:has(.submode:not(:empty)){ background:var(--green); }
+.osb.on:has(.submode:not(:empty)) .lbl{ background:none; padding:0; top:0; }
+.osb.on:has(.submode:not(:empty)) .lbl,
+.osb.on:has(.submode:not(:empty)) .submode{ color:#000; -webkit-text-stroke:0.7px #000; }
+
+/* ---- Rad 1 = etikett, rad 2 = submode. Max 4 tecken per rad. ----
+   Tjock svart outline -> lasbart mot radarns bakgrund. Ofarligt pa ovriga
+   sidor (svart mot svart bakgrund). */
+.osb .lbl{
+  display:block; white-space:nowrap;
+  font-size:var(--osb-font); font-weight:700; letter-spacing:1px; line-height:1;
+  -webkit-text-stroke:2.5px #000; paint-order:stroke fill;
+}
+.osb .submode{
+  display:block; white-space:nowrap;
+  font-size:var(--osb-font); line-height:1; letter-spacing:1px;   /* vit som rad 1 */
+  -webkit-text-stroke:2px #000; paint-order:stroke fill;
+}
+.osb .submode:empty{ display:none; }
+
+/* ---- Variant S (Small): kompakt datautlasning, upp till 3 rader ----
+   Samma fysiska slot - bara annan typografi. Valjs per knapp via
+   size:"S" i pages/ eller window.setOsbSize(n,'S') i runtime. */
+.osb-s .lbl{ font-size:12px; line-height:1.2; }
+.osb-s .lbl .sr{ display:block; font-size:12px; line-height:1.2; white-space:nowrap; }
+.osb-s .submode{ font-size:11px; }
+
+/* ---- Knappnummer: OVERLAY, paverkar aldrig radlayouten ----
+   Ligger OVANFOR sloten. Sedan texten ankras mot overkanten finns det ingen
+   ledig yta kvar inne i rutan - dar skulle numret hamna ovanpa etiketten. */
+.osb-num{
+  position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+  font-size:9px; font-weight:400; letter-spacing:0;
+  color:var(--green-dim); pointer-events:none;
+  -webkit-text-stroke:2px #000; paint-order:stroke fill;
+}
+body.hide-numbers .osb-num{ display:none; }
+/* Testsidan har inga etiketter alls - da far numret hela rutan. */
+body.test-mode .osb-num{ position:static; transform:none; font-size:var(--osb-font);
+  color:var(--green); display:block; }
+
+/* ---- Nedtryckt: 30x15 vit indikator ----
+   Ligger BAKOM texten och i linje med RAD 1. Med toppankrad text finns ingen
+   ledig yta inne i sloten, sa en indikator ovanpa skulle strecka over etiketten.
+   Texten har svart outline och blir darfor fullt lasbar mot det vita faltet. */
+.osb-ind{
+  position:absolute; left:50%; transform:translateX(-50%);
+  top:calc((1em - var(--osb-ind-h)) / 2);      /* overraden: i linje med rad 1 */
+  width:var(--osb-ind-w); height:var(--osb-ind-h);
+  background:var(--c-white); display:none; pointer-events:none;
+  z-index:0;
+}
+.osb .lbl, .osb .submode{ position:relative; z-index:1; }   /* texten ovanpa faltet */
+/* Samma kantorientering som texten. */
+.osb-left .osb-ind, .osb-right .osb-ind{ top:50%; transform:translate(-50%,-50%); }
+.osb-bottom .osb-ind{ top:auto; bottom:calc((1em - var(--osb-ind-h)) / 2); }
+.osb.active .osb-ind{ display:block; }
+
+/* Farglagd bakgrund pa HELA sloten - exakt samma yta som markeringsramen
+   (.osb.current), inte bara bakom textens glyfer. Anvands av GHPC:s sakring:
+   gron = SAFE (vapnen sparrade), gul = ARM.
+   Ligger EFTER .osb.current med samma specificitet och vinner darfor over
+   dess bakgrund. */
+.osb.bg-safe{ background:var(--c-green); }
+.osb.bg-arm { background:var(--c-yellow); }
+
+/* Pa fargad platta blir texten SVART. Outlinen byter till plattans farg -
+   en svart outline runt svart text vore osynlig, och en ljus skulle gora
+   glyferna luddiga. */
+.osb.bg-safe .lbl, .osb.bg-safe .submode{ color:#000; -webkit-text-stroke:2px var(--c-green); }
+.osb.bg-arm  .lbl, .osb.bg-arm  .submode{ color:#000; -webkit-text-stroke:2px var(--c-yellow); }
+
+/* Tryckmarkoren ska synas OVANPA text och platta. Bara har - pa vanliga
+   knappar ligger den kvar BAKOM texten, annars streckar den over etiketten
+   (det var ett medvetet val nar toppankrad text infordes). */
+.osb.bg-safe .osb-ind, .osb.bg-arm .osb-ind{ z-index:3; }
+
+/* Blinkande RAM (inte hela knappen). GHPC: vald ammunition som annu inte natt
+   patronlaget blinkar, medan den som ligger i loppet har solid ram - sa man ser
+   direkt att bytet inte gatt igenom an. Animation slar vanliga deklarationer,
+   sa den vinner over .osb.current utan !important. */
+@keyframes osb-lit-blink{
+  0%,49%  { border-color:var(--green); background:rgba(var(--green-rgb),.13); }
+  50%,100%{ border-color:transparent; background:transparent; }
+}
+.osb.lit-blink{ animation:osb-lit-blink .6s steps(1,end) infinite; }
+
+/* Blink: hall-in-varning pa STOP / SYS OFF (mellan 2s och 4s) */
+@keyframes osb-blink{ 0%,49%{ opacity:1; } 50%,100%{ opacity:.12; } }
+.osb.blink{ animation:osb-blink .5s steps(1,end) infinite; }
+
+/* ===== ProgBar ======================================================== */
+/* Standard 8 px. MEDIA/OSC anvander .thin (3 px) - den look som redan ar
+   godkand dar. Langden ar flexibel (satts av anvandaren av komponenten). */
+.pb{ width:100%; height:var(--pb-h); overflow:hidden; background:rgba(var(--green-rgb),.18); }
+.pb.thin{ height:var(--pb-h-thin); }
+.pb-fill{ display:block; height:100%; width:0%; background:var(--green); }
+.pb-fill.c-white{ background:var(--c-white); }
+.pb-fill.warn{ background:var(--c-yellow); }
+.pb-fill.crit{ background:var(--c-red); }
+
+/* ===== Gauge ========================================================== */
+/* TELEM:s design ar source of truth: 200-graders bage (220 -> 20 grader),
+   gapet nere till hoger dar digitalrutan sitter SOM EN DEL av gaugen.
+   Byggs av makeGauge()/makeNetGauge() i components.js. */
+.gauge{ width:150px; text-align:center; }
+.gauge svg{ width:150px; height:117px; display:block; }
+.g-dial{ fill:none; stroke:var(--green); stroke-width:2; stroke-linecap:butt; }
+.g-red{ fill:none; stroke:var(--c-red); stroke-width:3; stroke-linecap:butt; }
+.g-needle{ stroke:var(--green); stroke-width:2.5; transition:transform .6s ease; }
+.g-needle.hot{ stroke:var(--c-red); }
+.g-box{ fill:#000; stroke:var(--green); stroke-width:1.5; }
+.g-val{ fill:var(--green); font-size:15px; font-weight:700;
+        font-family:'ViperDisplay',"Consolas",monospace; }
+.g-val.hot{ fill:var(--c-red); }
+.g-label{ font-size:12px; letter-spacing:2px; color:var(--green-dim); }
+.g-label:empty{ display:none; }
+/* Storlekar: samma gauge, bara skalad (allt i SVG:n foljer med, aven
+   siffrorna). Ingen designvariant - geometrin ar densamma. */
+.gauge.g-m{ width:118px; }
+.gauge.g-s{ width:86px; }
+.gauge.g-m svg, .gauge.g-s svg{ width:100%; height:auto; }
+/* NET-gaugens tva visare: temafargen = upload, bla = download */
+.g-needle.n-down{ stroke:var(--c-blue); }
+text.g-val.n-down{ fill:var(--c-blue); stroke:none; font-size:13px; }
+text.g-val.n-up{ font-size:13px; }
+
+/* DCLT (RADAR-sidan): doljer en OSB-plats utan att flytta nagot.
+   visibility, inte display - slotgeometrin ska ligga kvar orord. */
+.osb.dclt-hidden{visibility:hidden}

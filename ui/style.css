@@ -1,0 +1,529 @@
+/* =====================================================================
+   style.css  -  INNEHALLSSTYLING per vy.
+
+   All GEOMETRI (slots, OSB-positioner) och alla FARGER ligger i
+   layout.css - lagg inga skarmkoordinater eller nya fargvarianter har.
+   En vy fyller sin slot; den vet inte var sloten sitter.
+   ===================================================================== */
+
+@font-face{
+  font-family:'ViperDisplay';
+  src:url('fonts/ViperDisplay-Bold.ttf') format('truetype');
+  font-weight:100 900;
+  font-style:normal;
+}
+*{box-sizing:border-box; margin:0; padding:0; border-radius:0;}
+html,body{
+  width:100%; height:100%; overflow:hidden;
+  background:var(--bg);
+  font-family:'ViperDisplay',"Consolas","Lucida Console",monospace;
+  color:var(--green);
+  user-select:none; cursor:default;
+}
+/* Panelen skalas av app.js (fitToWindow) och centreras har, sa en eventuell
+   overbliven remsa hamnar jamnt fordelad istallet for allt pa ena sidan. */
+body{ display:flex; align-items:center; justify-content:center; }
+
+/* ===== Vyer i DsMain =================================================
+   OBS: deklarera INTE display i en #view-*-regel - en ID-regel har hogre
+   specificitet an .view[hidden]{display:none}, sa vyn skulle da aldrig
+   doljas (lag kvar pa ALLA sidor). */
+.view{
+  position:absolute; inset:0; padding:var(--ds-pad);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.view[hidden]{ display:none; }
+.title{ position:absolute; top:12px; left:0; right:0; text-align:center;
+        font-size:15px; letter-spacing:3px; opacity:.6; }
+
+/* ===== Fonster-overlays ==============================================
+   Sliders och ringen ligger i sina hornslots (DsCornerTL/TR/BL). De ar
+   ankrade mot SAMMA horn som sloten, sa pixelvardena ar identiska med
+   fore slot-migreringen. */
+#focus-frame{ position:fixed; inset:5px; border:4px solid var(--green); pointer-events:none; display:none; z-index:50; }
+body.note-input #focus-frame{ display:block; }
+/* Huvudvolym (DsCornerTL) */
+#master-vol{ position:absolute; top:27px; left:52px; width:8px; height:50px; background:rgba(var(--green-rgb),.16); display:none; }
+#master-vol .mv-fill{ position:absolute; left:0; bottom:0; width:100%; background:var(--green); }
+/* MFD-bakgrundsljus (DsCornerBL) */
+#backlight{ position:absolute; bottom:27px; left:52px; width:8px; height:50px; background:rgba(var(--green-rgb),.16); display:none; }
+#backlight .bl-fill{ position:absolute; left:0; bottom:0; width:100%; background:var(--green); }
+/* UI-fonstrets egen ljusstyrka (DsCornerTR) */
+#screen-bright{ position:absolute; top:27px; right:52px; width:8px; height:50px; background:rgba(var(--green-rgb),.16); display:none; }
+#screen-bright .sb-fill{ position:absolute; left:0; bottom:0; width:100%; background:var(--green); }
+
+/* ===== RADAR (DsMainEX) ==============================================
+   Canvasen fyller hela displayytan, bakom OSB-lagret. I radarlage ar
+   #mfd genomskinligt for musen sa muspekaren nar canvasen (knapparna ar
+   fysiska - inget i OSB-lagret behover mus). */
+#radar-full{ position:absolute; inset:0; }
+#radar-full[hidden]{ display:none; }
+#radar-full canvas{ width:100%; height:100%; display:block; }
+body.radar-mode .ds-main{ border-color:transparent; }
+body.radar-mode .title{ display:none; }
+body.radar-mode #mfd{ pointer-events:none; }
+body.radar-mode #radar-full{ pointer-events:auto; }
+/* Anpassad muspekare pa RADAR. Faller tillbaka pa vanlig pil om filen saknas. */
+body.radar-mode, body.radar-mode *{ cursor:url('cursor.png') 22 22, auto; }
+/* RADAR SCALE-pilar (19=upp/18=ner): SVG-chevron injiceras av app.js.
+   Chevronen ar 20 px hog och ankras - som all etikettext - mot slotens
+   OVERKANT. Den knuffas darfor ned sa den hamnar lodratt centrerad i sloten:
+   (osb-h - 2*ram - svg-hojd) / 2 = (30 - 2 - 20) / 2 = 4 px. */
+body.radar-mode #osb-19 .lbl svg, body.radar-mode #osb-18 .lbl svg{
+  display:block; transform:translateY(4px);
+}
+
+/* ===== WTHR - allt inom DsMain: tidslinje, karta, METAR ================ */
+#wthr-scale{ font-size:var(--osb-font); letter-spacing:0; color:var(--green); }
+/* Kartan fyller HELA DsMain; tidslinjen och inforaden ligger ovanpa, tatt
+   mot over- resp. underkanten (svart kontur sa texten syns mot kartan). */
+#view-wthr{ padding:0; }
+#wthr-canvas{ position:absolute; top:0; bottom:0; left:24px; width:calc(100% - 48px); height:100%; display:block; }
+#wthr-tl{ position:absolute; left:0; right:0; top:0; height:30px; width:100%; display:block; pointer-events:none; }
+#wthr-info{ position:absolute; left:6px; right:6px; bottom:4px; font-size:13px; line-height:16px;
+  -webkit-text-stroke:3px #000; paint-order:stroke fill; pointer-events:none; }
+#wthr-info .wi-wx{ color:var(--c-blue); white-space:nowrap; overflow:hidden; }
+#wthr-info .wi-metar{ color:var(--c-yellow); }
+#wthr-info svg{ vertical-align:-2px; }
+body.wthr-mode .title{ display:none; }
+body.wthr-mode #mfd{ pointer-events:none; }
+body.wthr-mode #wthr-canvas{ pointer-events:auto; }
+/* CRSR: litet harkors med lucka i mitten (vit med svart kant), hotspot i mitten */
+body.wthr-mode, body.wthr-mode *{ cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='21' height='21'%3E%3Cg stroke-linecap='square'%3E%3Cpath d='M10.5 1v6M10.5 14v6M1 10.5h6M14 10.5h6' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M10.5 1v6M10.5 14v6M1 10.5h6M14 10.5h6' stroke='%23fff' stroke-width='2'/%3E%3C/g%3E%3C/svg%3E") 10 10, crosshair; }
+body.wthr-mode #osb-19 .lbl svg, body.wthr-mode #osb-18 .lbl svg{ display:block; transform:translateY(4px); }
+/* FORE-tabellen */
+/* FORC: klammer overst (samma som TELM:s FANS/CONS), en rad per dygn.
+   Kolumner: dag | vader | min | temperaturband | max | mm | vind (byar under). */
+#view-wfore{ justify-content:flex-start; }
+#wfore-tab{ width:100%; box-sizing:border-box; padding:30px 8px 0; }
+#wfore-tab .tl-brk{ margin:0 0 14px; }
+/* Ortnamnet langst till vanster i klammern */
+#wfore-tab .wf-brk span{ left:10px; transform:none; }
+.wf-rad{ display:grid; grid-template-columns:52px 104px 38px 1fr 38px 40px 62px;
+  column-gap:8px; align-items:center; height:58px; font-size:18px; font-weight:700; letter-spacing:1px; }
+.wf-rad + .wf-rad{ border-top:1px solid rgba(var(--green-rgb),.22); }
+.wf-hdr{ height:22px; font-size:12px; font-weight:400; color:var(--green-dim); }
+.wf-hdr + .wf-rad{ border-top:none; }
+.wf-r{ text-align:right; }
+.wf-dag small{ display:block; font-size:12px; font-weight:400; color:var(--green-dim); }
+.wf-kat{ font-size:13px; white-space:nowrap; }
+.wf-min{ color:var(--green-dim); }
+.wf-band{ position:relative; height:6px; border-left:1px solid var(--green-dim); border-right:1px solid var(--green-dim);
+  background:rgba(var(--green-rgb),.12); }
+.wf-band i{ position:absolute; top:0; bottom:0; background:var(--green); }
+.wf-nb{ color:var(--c-blue); }
+.wf-noll{ color:var(--green-dim); }
+.wf-vind svg{ vertical-align:-1px; margin-right:3px; }
+.wf-vind small{ display:block; font-size:12px; font-weight:400; color:var(--green-dim); }
+
+/* ---- FLTR-sidan (RADAR): ]-klammer + vertikal etikett till hoger om
+   HI/LO-paren. Klammern byggs av ramar - ingen glyf, skarpa horn. ---- */
+.fl-group{ position:absolute; left:2px; display:flex; align-items:center; gap:6px; }
+#fl-alt{ top:22px; height:150px; }
+#fl-spd{ top:212px; height:150px; }
+.fl-brk{ width:10px; height:100%; border-top:2px solid var(--green);
+  border-right:2px solid var(--green); border-bottom:2px solid var(--green); }
+.fl-txt{ writing-mode:vertical-rl; text-orientation:upright;
+  letter-spacing:1px; font-size:16px; font-weight:700; }
+/* Inmatningslage: HI/LO-knappen som just tar emot siffror blinkar */
+.osb.fl-input{ border-color:var(--green); animation:osb-blink 1s steps(2,start) infinite; }
+
+/* ===== Startup BIT (helskarmsoverlay, ovanpa allt) ===================
+   Ligger UTANFOR #mfd och foljer darfor fonstret, inte den skalade panelen. */
+#bit-full{ position:fixed; inset:0; width:auto; height:auto; z-index:200; background:#000; }
+#bit-full[hidden]{ display:none; }
+#bit-full.c-red{ background:var(--c-red); }
+#bit-full.c-yellow{ background:var(--c-yellow); }
+#bit-full.c-green{ background:var(--c-green); }
+#bit-full .bit-grid{ display:grid; width:100%; height:100%;
+  grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); }
+#bit-full .bit-grid div{ border:1px solid var(--c-white); }
+
+/* ===== Alerts Framework (ui/alerts.js ritar; alerts/core.py ager laget)
+   Fyller hemskarmens mittyta (klockan i MIN-lage = fritt). ============= */
+#view-clock{ position:absolute; }
+#alerts{ position:absolute; inset:0; display:flex; flex-direction:column;
+  flex-wrap:wrap; align-content:center; justify-content:center; gap:1px 22px;
+  font-size:15px; letter-spacing:1px; text-align:left;
+  visibility:visible; }   /* MIN/OFF-laget gommer hela #view-clock (visibility) -
+                             listan maste uttryckligen synas anda (tom = osynlig) */
+.al-line.crit{ color:var(--c-red); }
+.al-line.warn{ color:var(--c-yellow); }
+.al-line.note{ color:var(--c-blue); }
+
+/* ===== Klocka / hemskarm ============================================= */
+.clock{ font-size:74px; font-weight:700; letter-spacing:4px; }
+.tz-date{ font-size:19px; margin-top:10px; letter-spacing:1px; opacity:.85; }
+.week{ font-size:16px; margin-top:5px; letter-spacing:2px; opacity:.6; }
+/* MIN-lagets kompakta utlasning i DsMains ovre horn */
+.corner-clock{ position:absolute; top:10px; font-size:25px; font-weight:700;
+  letter-spacing:2px; opacity:.85; display:none; }
+.cc-left{ left:14px; } .cc-right{ right:14px; }
+
+/* ===== WNDW: fonstervaljare (hemskarm plats 19, hall 1s) ==============
+   Ett namn per OSB pa overraden. Cellerna HARLEDS ur OSB-tokens sa de sitter
+   exakt over sin knapp aven om knappdelningen andras (jfr TIMER-klamrarna). */
+#wndw-pick{ position:absolute; left:0; right:0; top:8px; height:34px; }
+#wndw-pick[hidden]{ display:none; }
+#wndw-pick .wp{
+  position:absolute; top:0; width:var(--osb-pitch-x);
+  text-align:center; font-size:13px; font-weight:700; letter-spacing:1px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+/* Overradens vanliga etiketter MORKAS men slacks inte: deras normala funktion ar
+   avstangd sa lange valjaren ar oppen, men de ska fortfarande ga att lasa.
+   --green-dim ar 50 % av temafargen - samma dampning som knappnumren. */
+body.wndw-pick .osb-top .lbl,
+body.wndw-pick .osb-top .submode{ color:var(--green-dim); opacity:1; }
+
+/* ---- CONFIG-lagen ---- */
+body.hide-border .ds-main{ border-color:transparent; }
+body.hide-border .title{ display:none; }
+body.time-min #view-clock, body.time-off #view-clock{ visibility:hidden; }
+body.on-home.time-min .corner-clock{ display:block; }
+/* WNDW-valjaren TAR OVER overkanten - annars skriver den over hornklockan,
+   datumet och sidtiteln, som ligger pa samma hojd. Regeln maste komma EFTER
+   raden ovan och ha minst samma specificitet, annars vinner den. */
+body.wndw-pick.on-home .corner-clock{ display:none; }
+body.wndw-pick .title{ display:none; }
+
+/* ===== TEST-sida ===================================================== */
+.test-big{ font-size:88px; font-weight:700; letter-spacing:6px; }
+.osb.test-lit{ background:var(--green); color:#000; }
+
+/* ===== NOTE-sida ===================================================== */
+#note-field{
+  flex:1; width:100%; resize:none;
+  background:transparent; color:var(--green);
+  border:none; padding:12px; font-family:inherit; font-size:18px;
+  line-height:1.4; outline:none;
+}
+#note-field:read-only{ opacity:.65; }
+
+/* ===== VOL-sida: 5 horisontella sliders ============================== */
+.vol-rows{ width:90%; height:100%; display:flex; flex-direction:column;
+  justify-content:space-around; padding:16px 0; }
+.vol-row{ display:flex; flex-direction:column; gap:5px; }
+.vol-head{ display:flex; justify-content:space-between; align-items:baseline; }
+.vol-name{ font-size:16px; color:var(--green-dim); overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+.vol-val{ font-size:16px; font-weight:700; color:var(--green); }
+
+/* ===== Telemetri-sidor =============================================== */
+/* FANS/DISKS ar listor -> ankras uppat. TELEM:s ECAM-block centreras i DsMain
+   (bade horisontellt och vertikalt) - DsMain ar 44 px hogre an den gamla
+   ritytan, sa flex-start skulle lamna ett tomt band nertill. */
+#view-disks{ justify-content:flex-start; padding-top:24px; gap:8px; }
+.tsec{ width:100%; }
+.tsec-h{
+  font-size:13px; letter-spacing:3px; color:var(--green-dim);
+  border-bottom:1px solid rgba(var(--green-rgb),.22); padding-bottom:2px; margin-bottom:4px;
+}
+/* TELM: tva lika breda halvor, tva rader. Rad 1 = matare | FPS,
+   rad 2 = FANS | CONS (klamrarna hamnar darmed pa samma hojd).
+   Gauge-designen ligger i layout.css. Sidtiteln doljs (se nedan). */
+#view-telem1{ justify-content:space-between; padding-top:10px; padding-bottom:22px; }
+/* Vanster halva ar bredare: tva stora matare + rubrik ska rymmas bredvid varandra */
+.tl-row{ display:grid; grid-template-columns:1.2fr 0.8fr; column-gap:18px; width:100%; }
+.tl-col{ display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0; }
+/* Rubriken star uppe mellan de tva matarna, i hojd med bagarna */
+.tl-pair{ display:flex; align-items:flex-start; }
+.tl-h{ font-size:14px; letter-spacing:1px; width:42px;
+  text-align:center; margin-top:25px; }
+.tl-h.s{ font-size:12px; width:36px; margin-top:20px; }
+.tl-small{ display:flex; justify-content:space-between; width:100%; padding:0 6px; }
+
+/* FPS: 60 s-snitt (bla) | 1 % low (gul). Flaskhalsen under i fargkod. */
+.tl-fps{ gap:6px; padding-top:6px; }
+.fps-h{ font-size:24px; font-weight:700; letter-spacing:1px; }
+.fps-v{ font-size:20px; font-weight:700; }
+#fps-avg{ color:var(--c-blue); }
+#fps-low{ color:var(--c-yellow); }
+.fps-b{ font-size:16px; font-weight:700; min-height:20px; }
+.fps-b.gpu{ color:var(--c-green); }
+.fps-b.cpu{ color:var(--c-yellow); }
+/* Vilken app siffrorna galler - annars gar det inte att se om FPS:en
+   kommer fran spelet eller fran nagot annat som ritar. */
+/* Grafer (makeGraph i app.js): bildtid under FPS pa TELM, och de tre pa
+   GRPH-sidan. Pa TELM ligger den i den tomma ytan under FPS-blocket - inget
+   annat pa sidan flyttas av den. SVG:n skalas fritt (preserveAspectRatio
+   none), sa linjerna har non-scaling-stroke och etiketterna ar HTML ovanpa -
+   annars skulle bada tanjas. */
+.tl-graph{ position:relative; width:100%; height:100px; margin-top:6px; }
+.tl-graph svg, .gr-graf svg{ width:100%; height:100%; display:block; }
+/* Utan ram - en dampad baslinje ger grafen en botten att sta pa. */
+.tg-bas{ stroke:var(--green-dim); stroke-width:1; vector-effect:non-scaling-stroke; }
+.tg-a, .tg-b{ fill:none; stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.tg-a{ stroke:var(--c-white); }
+.tg-b{ stroke:var(--c-blue); }
+.tg-ref{ stroke:var(--green-dim); stroke-width:1; stroke-dasharray:3 3;
+  vector-effect:non-scaling-stroke; }
+.tg-lbl{ position:absolute; font-size:11px; line-height:12px; letter-spacing:1px;
+  color:var(--green-dim); }
+.tg-tl{ left:3px; top:2px; }
+.tg-bl{ left:3px; bottom:2px; }
+.tg-tr{ right:3px; top:2px; }
+.tg-tr .gpu{ color:var(--c-blue); }
+/* GRPH-sidan: tre grafer staplade, rubrik till vanster */
+#view-grph{ justify-content:space-around; padding:30px 14px 24px; }
+.gr-rad{ display:flex; align-items:stretch; gap:10px; width:100%; height:130px; }
+.gr-h{ width:44px; font-size:14px; letter-spacing:1px; padding-top:2px; }
+.gr-graf{ position:relative; flex:1; }
+.fps-app{ font-size:12px; letter-spacing:1px; color:var(--green-dim);
+  max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+
+/* Klammer: overkant med nedvikta andar, rubriken bryter linjen i mitten.
+   Samma formsprak som TMR/FLTR-klamrarna - ramar, skarpa horn, ingen glyf. */
+.tl-brk{ position:relative; width:100%; height:9px; margin-top:8px;
+  border:2px solid var(--green); border-bottom:none; }
+.tl-brk span{ position:absolute; left:50%; top:-10px; transform:translateX(-50%);
+  padding:0 8px; background:var(--bg); font-size:14px; line-height:16px; letter-spacing:1px; }
+
+/* 2x2: C1 C2 overst, C3 CPU under. */
+.tl-fans{ display:grid; grid-template-columns:1fr 1fr; justify-items:center; width:100%; }
+.tl-fan{ display:flex; flex-direction:column; align-items:center; }
+/* Namnet foljer bagens vanstra sida, som i skissen */
+.tl-fan-n{ font-size:13px; height:16px; transform:translate(-18px, 12px) rotate(-35deg);
+  transform-origin:center; }
+.tl-cons{ width:100%; padding:4px 8px 0; display:flex; flex-direction:column; gap:4px; }
+.tl-app{ display:flex; justify-content:space-between; gap:8px; font-size:15px; }
+.tl-app span:first-child{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+body.telem-mode .title{ display:none; }
+/* Diskar - baren ar standard-ProgBar (.pb), fargen visar fyllnadsgrad */
+.disk{ margin:11px 0; font-size:17px; }
+.disk-h{ display:flex; justify-content:space-between; font-weight:700; color:var(--green); }
+.disk .pb{ margin:6px 0; }
+.disk-f{ font-size:15px; color:var(--green); opacity:.9; }
+
+/* ===== FPV: stickoverlay (SPEC > FPV) ===============================
+   EN ruta som fyller HELA DsMain, med hartkors och en prick. Vanster skarm
+   visar vanster spak, hoger skarm den hogra (valet gors i fpv.py).
+   Pricken flyttas med transform fran ui/fpv.js ~30 ggr/s - ingen layout
+   ritas om. */
+#view-fpv{ padding:0; }
+.fpv-box{ position:relative; width:100%; height:100%;
+  border:1px solid var(--green-dim); }
+/* Hartkorset: tva 1 px-linjer genom mitten */
+.fpv-box::before, .fpv-box::after{ content:''; position:absolute;
+  background:rgba(var(--green-rgb),.35); }
+.fpv-box::before{ left:0; right:0; top:50%; height:1px; }
+.fpv-box::after{ top:0; bottom:0; left:50%; width:1px; }
+.fpv-dot{ position:absolute; left:50%; top:50%; width:20px; height:20px;
+  margin:-10px 0 0 -10px; border:2px solid var(--green); background:var(--bg); }
+.fpv-val{ position:absolute; left:8px; top:6px;
+  font-size:14px; letter-spacing:1px; color:var(--green-dim); }
+.fpv-link{ position:absolute; left:0; right:0; top:50%; margin-top:-11px;
+  text-align:center; font-size:20px; font-weight:700; color:var(--c-red); }
+
+/* ===== MEDIA-vyn ======================================================
+   Oscilloskop (ui/scope.js) ELLER medieinfo - OSC-knappen vaxlar.
+   Grundlage = medieinfo (skopet doljs). */
+#view-now{ padding:0; }
+#scope-canvas{ width:100%; height:100%; display:block; background:#000; }
+#scope-canvas[hidden]{ display:none; }
+/* Infolaget (OSC av): storre omslag UTAN ram, allt forskjutet nedat */
+#np-info{ position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; padding-bottom:26px; }
+#np-info[hidden]{ display:none; }
+.np-art-wrap{ width:230px; height:230px; position:relative; margin:34px 0 18px; }
+#np-art{ width:100%; height:100%; object-fit:cover; display:none; }
+.np-noart{ position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; font-size:96px; color:var(--green-dim); }
+.np-title{ font-size:22px; font-weight:700; text-align:center; line-height:1.2;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; max-width:92%; }
+.np-artist{ font-size:16px; opacity:.7; margin-top:5px; text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:92%; }
+/* Foten: progressbar + metadata. Delas av bada lagen, byter skepnad via .osc-on. */
+#np-foot{ position:absolute; left:0; right:0; bottom:0; padding:0 2%; }
+/* Liten volymindikator pa MEDIA (visas 1.5 s nar VOL +/- anvands) */
+#np-vol{ position:absolute; left:14%; right:14%; bottom:34px; z-index:5; }
+#np-vol[hidden]{ display:none; }
+#np-vol-num{ display:block; font-size:13px; letter-spacing:2px;
+  color:var(--green-dim); margin-bottom:4px; text-align:center; }
+.np-meta{ display:flex; justify-content:space-between; align-items:baseline;
+  font-size:14px; opacity:.75; margin-top:5px; letter-spacing:1px; }
+#np-tech{ display:none; }                       /* teknisk info bara i OSC-laget */
+/* OSC-laget: den TUNNA baren (.pb.thin) allra langst ner, teknisk info till
+   vanster och aterstaende tid till hoger. */
+#view-now.osc-on #np-foot{ padding:0; }
+#view-now.osc-on .np-meta{ font-size:12px; margin-top:3px; padding:0 2px; }
+#view-now.osc-on #np-tech{ display:inline; }
+/* VOL +/- (plats 19/18) storre an vanlig etikett */
+body.media-mode #osb-19 .lbl, body.media-mode #osb-18 .lbl{ font-size:30px; line-height:1; }
+/* "VOL" mellan +/- pa plats 19/18 (positioneras fran knapparnas rects i app.js) */
+#vol-mid, .osb-mid{ position:fixed; z-index:60; font-size:15px; font-weight:700;
+  letter-spacing:2px; color:var(--green-dim); pointer-events:none;
+  -webkit-text-stroke:2px #000; paint-order:stroke fill; }
+#vol-mid[hidden], .osb-mid[hidden]{ display:none; }
+
+/* ===== TIMER-sidan (nedrakning / stoppur) ============================ */
+#view-timer{ gap:4px; }
+
+/* Klamrar under +/- paren: 0/1 = HRS, 2/3 = MIN. Oppningen vetter UPPAT mot
+   knapparna (ingen overkant) - samma konstruktion som FLTR-sidans ]-klammer,
+   fast vriden ett kvarts varv. Byggd av ramar: skarpa horn, ingen glyf.
+   Positionen HARLEDS ur OSB-tokens sa klamrarna foljer med om delningen andras.
+   x = OSB-centrum - DsMains vanstra innerkant (bezel + 1 px ram). */
+/* Sidtiteln ar dold pa TMR-sidan (se nedan) - klamrarna kan darfor ligga hogt.
+   Golvet ar top:0 (= DsMains innerkant, 11 px under knappraden). */
+.tm-brk{
+  position:absolute; top:12px; height:10px;
+  border:2px solid var(--green); border-top:none;
+}
+.tm-brk span{
+  position:absolute; left:0; right:0; top:13px; text-align:center;
+  font-size:16px; font-weight:700; letter-spacing:1px;
+}
+#tm-brk-h{ left:calc(var(--disp) / 2 - var(--bezel) - 1px - 2 * var(--osb-pitch-x));
+           width:var(--osb-pitch-x); }
+#tm-brk-m{ left:calc(var(--disp) / 2 - var(--bezel) - 1px);
+           width:var(--osb-pitch-x); }
+
+/* Sidtiteln doljs har - klamrarna HRS/MIN mots med den i overkanten, och sidan
+   ar entydig utan den (MODE-knappen visar CD/SW). */
+body.timer-mode .title{ display:none; }
+
+/* +/- (plats 0-3) storre an vanlig etikett - samma grepp som VOL +/- pa MEDIA */
+body.timer-mode #osb-0 .lbl, body.timer-mode #osb-1 .lbl,
+body.timer-mode #osb-2 .lbl, body.timer-mode #osb-3 .lbl{ font-size:30px; line-height:1; }
+
+.tm-big{ font-size:62px; font-weight:700; letter-spacing:2px; line-height:1.05;
+  font-variant-numeric:tabular-nums; }
+.tm-big.run{ color:var(--green); }
+.tm-big.done{ color:var(--c-red); animation:osb-blink 1s steps(2,start) infinite; }
+/* Undertexten visar numera BARA slutlarmet - RUNNING/STOPPED framgar av att
+   siffrorna tickar och av START/STOP-etiketten pa plats 17. */
+.tm-sub{ font-size:15px; letter-spacing:2px; color:var(--c-red); font-weight:700;
+  min-height:19px; }
+.tm-barwrap{ width:70%; margin-top:14px; }
+
+/* Stoppurslage: ingen progressbar (inget mal att gora framsteg mot) - i stallet
+   varvtider. display satts pa BARNEN, aldrig pa #view-timer sjalv (ID-regeln
+   skulle sla .view[hidden] och vyn skulle ligga kvar pa alla sidor). */
+.tm-laps{ display:none; margin-top:10px; font-size:17px; line-height:1.35;
+  letter-spacing:1px; font-variant-numeric:tabular-nums; text-align:center; }
+.tm-laps .lp-n{ color:var(--green-dim); margin-right:10px; }
+#view-timer.tm-sw .tm-barwrap{ display:none; }
+#view-timer.tm-sw .tm-laps{ display:block; }
+
+/* Nedrakningsring i DsCornerTR. Visas pa ALLA sidor sa lange en nedrakning gar. */
+#tm-ring{ position:absolute; top:27px; right:27px; width:40px; height:40px; }
+#tm-ring[hidden]{ display:none; }
+.tmr-edge{ fill:none; stroke:#000; stroke-width:12; }   /* svart kontur underst */
+.tmr-track{ fill:none; stroke:rgba(var(--green-rgb),.20); stroke-width:8; }
+.tmr-fill{ fill:none; stroke:var(--green); stroke-width:8; stroke-linecap:butt; }
+
+
+/* ===== SPEC > GHPC ====================================================
+   Allt harleds ur tokens i layout.css. Vyn ligger i DsMain, vars origo ar
+   (--bezel, --bezel) - darav att --bezel dras bort ur OSB-koordinaterna. */
+
+/* Rackvidden mitt emellan chevronerna pa plats 5 och 6.
+   Hoger kolumns slot i har centrum y = --osb-y-anchor + --osb-pitch-y*(i-4);
+   mitten mellan i=0 och i=1 ar alltsa (-4 + -3)/2 = -3.5 pitch. */
+/* Rackvidden sitter MELLAN chevronerna, alltsa UTE I KANTBANDET - inte inne i
+   DsMain. Elementet bor kvar i #view-ghpc men lagger sig utanfor: .ds-main har
+   ingen overflow:hidden, sa ett barn far sticka ut.
+   DsMains origo ar (--bezel, --bezel), sa left raknas som skarm-x minus bezel.
+   Vi vill hamna mitt i hogra kantbandet: --disp - --bezel/2 = 615 pa skarmen.
+   Lodratt: mitten mellan hoger kolumns i=0 och i=1 = -3.5 pitch fran ankaret. */
+#gh-range{
+  position:absolute;
+  left:calc(var(--disp) - var(--bezel) / 2 - var(--bezel));
+  top:calc(var(--osb-y-anchor) + var(--osb-pitch-y) * -3.5 - var(--bezel));
+  transform:translate(-50%, -50%);
+  text-align:center; white-space:nowrap;
+}
+/* 18px: fyra siffror blir da ungefar 46 px brett, dvs exakt en OSB-slots bredd,
+   sa talet ryms i kantbandet utan att klattra in over DsMains ram. */
+#gh-range-val{
+  font-size:18px; font-weight:700; letter-spacing:1px;
+  color:var(--green);                     /* manuellt instalid rackvidd */
+  -webkit-text-stroke:2.5px #000; paint-order:stroke fill;
+}
+#gh-range-val.lased{ color:var(--c-blue); }   /* lasermatt */
+
+/* CC-klammer over plats 13/14. Oppnar NEDAT mot knapparna (tvartom mot
+   TIMER-sidans HRS/MIN, som sitter under sina knappar). Underradens slot i har
+   centrum x = --disp/2 + --osb-pitch-x*(i-2); 14 ar i=0 och 13 ar i=1. */
+#gh-cc{
+  position:absolute; height:10px;
+  left:calc(var(--disp) / 2 - var(--bezel) - 2 * var(--osb-pitch-x));
+  width:var(--osb-pitch-x);
+  bottom:14px;
+  border:2px solid var(--green); border-bottom:none;
+}
+#gh-cc span{
+  position:absolute; left:0; right:0; bottom:13px; text-align:center;
+  font-size:16px; font-weight:700; letter-spacing:1px;
+}
+
+/* Flaggor bredvid ammunitionsplatserna (vanster kolumn 19-16 = --i 0-3).
+   En rad per plats: forst ampullladan (LO/OUT), sedan stuvningen (STOW ...).
+   Raden ligger strax innanfor DsMains vanstra kant, i linje med sin slot. */
+.gh-row{
+  position:absolute; left:6px;
+  top:calc(var(--osb-y-anchor) + var(--osb-pitch-y) * (var(--i) - 4) - var(--bezel));
+  transform:translateY(-50%);
+  display:flex; align-items:center; gap:6px;
+}
+#gh-row-0{ --i:0; } #gh-row-1{ --i:1; } #gh-row-2{ --i:2; } #gh-row-3{ --i:3; }
+
+.gh-badge, .gh-stow{
+  font-size:18px; font-weight:700; letter-spacing:1px; padding:0 4px;
+  white-space:nowrap;
+  -webkit-text-stroke:2px #000; paint-order:stroke fill;
+}
+.gh-badge:empty, .gh-stow:empty{ display:none; }
+.gh-badge.lo, .gh-stow.lo{ color:var(--c-yellow); }
+/* Slut: svart text pa rod platta. Ingen outline - den skulle sudda ut texten. */
+.gh-badge.out, .gh-stow.out{ color:#000; background:var(--c-red); -webkit-text-stroke:0; }
+/* Stuvningsflaggan ar sekundar - nagot mindre an ampullladans. */
+.gh-stow{ font-size:15px; }
+
+/* RNG-chevronerna pa plats 5/6 ar samma SVG som RADAR:s och behover samma
+   nedknuff for att hamna lodratt centrerade i sloten (se regeln for RADAR). */
+body.ghpc-mode #osb-5 .lbl svg, body.ghpc-mode #osb-6 .lbl svg{
+  display:block; transform:translateY(4px);
+}
+
+/* CC +/- (plats 13/14) storre an vanlig etikett - samma grepp som TIMER-sidans
+   +/- och VOL pa MEDIA. */
+body.ghpc-mode #osb-13 .lbl, body.ghpc-mode #osb-14 .lbl{ font-size:30px; line-height:1; }
+
+/* SAFE-varning: visas nar man forsoker avfyra med sakringen pa. Fyra 60x60-rutor
+   i DsMains horn + SAFE i mitten. Ligger over vyns innehall men under OSB-lagret. */
+#gh-safe-warn{ position:absolute; inset:0; pointer-events:none; }
+#gh-safe-warn[hidden]{ display:none; }
+/* Ifyllda, inte bara konturer - de ska synas direkt i ogonvran. */
+.gh-sq{ position:absolute; width:60px; height:60px; background:var(--c-green); }
+.gh-sq.tl{ left:0; top:0; } .gh-sq.tr{ right:0; top:0; }
+.gh-sq.bl{ left:0; bottom:0; } .gh-sq.br{ right:0; bottom:0; }
+#gh-safe-txt{
+  position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+  text-align:center; font-size:76px; font-weight:700; letter-spacing:6px;
+  color:var(--c-green);
+  -webkit-text-stroke:3px #000; paint-order:stroke fill;
+}
+
+/* Laservarning: fyra blaa trianglar i DsMains horn + LASER i mitten.
+   Trianglarna ritas med border-tricket - ratvinkliga, med den rata vinkeln i
+   hornet, sa de foljer DsMains kant precis som SAFE-rutorna gor. */
+#gh-laser-warn{ position:absolute; inset:0; pointer-events:none; }
+#gh-laser-warn[hidden]{ display:none; }
+.gh-tri{ position:absolute; width:0; height:0; }
+.gh-tri.tl{ left:0; top:0;
+  border-top:60px solid var(--c-blue); border-right:60px solid transparent; }
+.gh-tri.tr{ right:0; top:0;
+  border-top:60px solid var(--c-blue); border-left:60px solid transparent; }
+.gh-tri.bl{ left:0; bottom:0;
+  border-bottom:60px solid var(--c-blue); border-right:60px solid transparent; }
+.gh-tri.br{ right:0; bottom:0;
+  border-bottom:60px solid var(--c-blue); border-left:60px solid transparent; }
+#gh-laser-txt{
+  position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+  text-align:center; font-size:76px; font-weight:700; letter-spacing:6px;
+  color:var(--c-blue);
+  -webkit-text-stroke:3px #000; paint-order:stroke fill;
+}
