@@ -3,8 +3,9 @@
    noggrannhetscirkel, riktningskil). GPS kraver https (eller localhost).
 
      const g = MapGps(view, { color, outline, onFix(), onError(text) })
-     g.start() / g.stop()        -> maste startas fran ett knapptryck (iOS fragar om lov)
-     g.on() / g.pos()            -> { lat, lon, acc, heading (grader, null om okand) } | null
+     g.setMode('hi'|'lo'|'off')  -> maste anropas fran ett knapptryck (iOS fragar om lov)
+                                    HI = GPS + kompass, LO = grov position utan kompass (sparar batteri)
+     g.mode() / g.on() / g.pos() -> { lat, lon, acc (m), t (ms), heading (grader, null om okand) } | null
      g.follow() / g.setFollow(b) -> foljlage: kartan centreras pa positionen
 
    Riktning: GPS-kursen nar man ror sig (annars ar den brus), annars telefonens
@@ -13,9 +14,11 @@
 (function(root){
   const MOVING = 1;                                    // m/s: over detta ar GPS-kursen palitlig
   const RES0 = 156543.03392804097;                     // m per px vid zoom 0
+  const OPT = { hi: { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
+                lo: { enableHighAccuracy: false, maximumAge: 60000, timeout: 60000 } };
 
   function MapGps(view, o){
-    let watch = null, pos = null, follow = false, compass = null, listening = false;
+    let watch = null, mode = 'off', pos = null, follow = false, compass = null, listening = false;
 
     view.addLayer({ id: 'gps', visible: true, status: '', draw: function(ctx, v){
       if(watch == null || !pos) return;
@@ -45,7 +48,7 @@
 
     function fix(g){
       const c = g.coords, moving = c.speed != null && c.speed > MOVING && c.heading != null && !isNaN(c.heading);
-      pos = { lat: c.latitude, lon: c.longitude, acc: c.accuracy || 0, moving: moving, heading: moving ? c.heading : compass };
+      pos = { lat: c.latitude, lon: c.longitude, acc: c.accuracy || 0, t: g.timestamp, moving: moving, heading: moving ? c.heading : compass };
       if(follow) view.setCenter(pos.lon, pos.lat, view.zoom < 12 ? 14 : view.zoom);
       else view.redraw();
       if(o.onFix) o.onFix();
@@ -64,26 +67,40 @@
       window.addEventListener('deviceorientationabsolute', onOrient);
     }
 
+    function quietCompass(){
+      if(!listening) return;
+      listening = false;
+      window.removeEventListener('deviceorientation', onOrient);
+      window.removeEventListener('deviceorientationabsolute', onOrient);
+      compass = null;
+      if(pos && !pos.moving) pos.heading = null;
+    }
+
     return {
-      start: function(){
-        if(watch != null) return;
-        if(!navigator.geolocation || !window.isSecureContext){
+      setMode: function(m){
+        if(m === mode) return;
+        if(m !== 'off' && (!navigator.geolocation || !window.isSecureContext)){
           if(o.onError) o.onError('GPS kräver https (sidan körs över ' + location.protocol + ')');
           return;
         }
-        follow = true;
-        watch = navigator.geolocation.watchPosition(fix, function(e){ if(o.onError) o.onError(e.message || ('fel ' + e.code)); },
-                                                    { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
-        // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = ingen kil nar man star still.
-        const DO = window.DeviceOrientationEvent;
-        if(DO && DO.requestPermission) DO.requestPermission().then(function(s){ if(s === 'granted') listenCompass(); }, function(){});
-        else if(DO) listenCompass();
-      },
-      stop: function(){
         if(watch != null) navigator.geolocation.clearWatch(watch);
-        watch = null; pos = null; follow = false;
+        watch = null;
+        if(m === 'off'){ pos = null; follow = false; }
+        else{
+          if(mode === 'off') follow = true;
+          watch = navigator.geolocation.watchPosition(fix, function(e){ if(o.onError) o.onError(e.message || ('fel ' + e.code)); }, OPT[m]);
+        }
+        mode = m;
+        if(m !== 'hi') quietCompass();
+        else{
+          // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = ingen kil nar man star still.
+          const DO = window.DeviceOrientationEvent;
+          if(DO && DO.requestPermission) DO.requestPermission().then(function(s){ if(s === 'granted') listenCompass(); }, function(){});
+          else if(DO) listenCompass();
+        }
         view.redraw();
       },
+      mode: function(){ return mode; },
       on: function(){ return watch != null; },
       pos: function(){ return pos; },
       follow: function(){ return follow; },

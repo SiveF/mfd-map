@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MFD MAP">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.webmanifest">
@@ -45,9 +45,12 @@
         <!-- Vald punkt: namn, koordinat, hojd, avstand + baring fran min position -->
         <div id="m-point" hidden></div>
       </div>
-      <!-- Helskarmspanel (MAP, LIST, OLAT, GOTO, MENU, DIAG) -->
+      <!-- Slot 7-12: vanster kant, vertikal text. Tomma slots tar inga tryck -->
+      <div id="m-side"></div>
+      <!-- Helskarmspanel (MAP, NAV, GOTO, GPS, OPTN, DIAG) -->
       <div id="m-panel" hidden></div>
     </div>
+    <!-- Slot 1-6: bottenmarginalen -->
     <div id="m-bar"></div>
   </div>
   <input id="m-file" type="file" accept=".json,application/json" hidden>

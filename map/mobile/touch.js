@@ -3,7 +3,9 @@
    tva fingrar = nypa (zoom) + vrida + flytta, kort tryck = onTap.
    MapView rors inte - datorns musstyrning ligger kvar dar.
 
-     MapTouch(view, { tap(p), moved() })   moved = anvandaren flyttade kartan
+     MapTouch(view, { tap(p), moved(), grab(p) })   moved = anvandaren flyttade kartan
+     grab(p) -> { move(p), up() } | null: verktyg (skissen) tar ett fingers drag. Fragas forst
+     nar fingret flyttat sig, sa en nypning som borjar med ett finger inte ritar nagot.
      MapTouch.pair(view, s, a, b)          ett steg i tvafingersgesten (testas i map/check.js)
 
    Vridningen slapps forst nar fingrarna vridit 8 grader tillsammans - annars
@@ -33,13 +35,14 @@
   function MapTouch(v, o){
     const c = v.canvas;
     const xy = function(t){ const r = c.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; };
-    let one = null, two = null, tap = null;      // ett finger: senaste punkt; tap: { x, y, t } tills det inte ar ett tryck
+    let one = null, two = null, tap = null, stroke = null;   // ett finger: senaste punkt; tap: { x, y, t } tills det inte ar ett tryck
+    const endStroke = function(){ if(stroke){ stroke.up(); stroke = null; v.redraw(); } };
 
     function sync(ev){
       const ts = ev.touches;
       two = ts.length === 2 ? pairState(xy(ts[0]), xy(ts[1])) : null;
       one = ts.length === 1 ? xy(ts[0]) : null;
-      if(ts.length > 1) tap = null;
+      if(ts.length > 1){ tap = null; endStroke(); }
     }
     c.addEventListener('touchstart', function(ev){
       ev.preventDefault();
@@ -54,14 +57,19 @@
       }
       else if(one && ev.touches.length === 1){
         const p = xy(ev.touches[0]);
-        if(tap && Math.hypot(p.x - tap.x, p.y - tap.y) > TAP_PX) tap = null;
-        if(!tap){ v.panBy(p.x - one.x, p.y - one.y); if(o.moved) o.moved(); one = p; }
+        if(tap && Math.hypot(p.x - tap.x, p.y - tap.y) > TAP_PX){
+          if(o.grab) stroke = o.grab({ x: tap.x, y: tap.y });
+          tap = null;
+        }
+        if(stroke){ stroke.move(p); v.redraw(); one = p; }
+        else if(!tap){ v.panBy(p.x - one.x, p.y - one.y); if(o.moved) o.moved(); one = p; }
       }
     }, { passive: false });
     const end = function(ev){
       ev.preventDefault();                       // inga emulerade musklick efterat
       sync(ev);
       if(!ev.touches.length){
+        endStroke();
         if(tap && ev.type === 'touchend' && Date.now() - tap.t < TAP_MS && o.tap) o.tap({ x: tap.x, y: tap.y });
         tap = null;
       }

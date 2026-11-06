@@ -131,6 +131,14 @@
     v.onChange = function(cb){ listeners.push(cb); };
     v.onClick = function(cb){ clickers.push(cb); };
     v.onGrab = function(cb, btn){ grabbers.push({ cb: cb, btn: btn || 0 }); };
+    // Samma fraga som vanster musnedtryck, for telefonens fingrar.
+    v.grabAt = function(p){
+      for(let i = 0; i < grabbers.length; i++){
+        const h = grabbers[i].btn === 0 && grabbers[i].cb(p);
+        if(h) return h;
+      }
+      return null;
+    };
 
     v.draw = function(){
       pending = false;
