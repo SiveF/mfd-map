@@ -1,6 +1,6 @@
 /* =====================================================================
-   map/mobile/gps.js  -  MIN POSITION. Geolocation + kompass + lager (prick,
-   noggrannhetscirkel, riktningskil). GPS kraver https (eller localhost).
+   map/mobile/gps.js  -  MIN POSITION. Geolocation + kompass + lager (pil i
+   fardriktningen, prick utan riktning, noggrannhetscirkel). GPS kraver https (eller localhost).
 
      const g = MapGps(view, { color, outline, onFix(), onError(text), compassTurn() -> grader })
      g.setOn(pa)                 -> maste anropas fran ett knapptryck (iOS fragar om lov)
@@ -8,7 +8,7 @@
      g.setFollow(b)              -> kartan centreras pa positionen och vrids sa att riktningen ar uppat
 
    Riktning: GPS-kursen nar man ror sig (annars ar den brus), annars telefonens
-   kompass om den finns och iOS fatt lov. Finns ingen ritas ingen kil.
+   kompass om den finns och iOS fatt lov. Finns ingen ritas en prick.
    ===================================================================== */
 (function(root){
   const MOVING = 1;                                    // m/s: over detta ar GPS-kursen palitlig
@@ -29,17 +29,16 @@
         ctx.globalAlpha = .6; ctx.lineWidth = 1.5; ctx.strokeStyle = o.color; ctx.stroke();
         ctx.globalAlpha = 1;
       }
-      if(pos.heading != null){
-        // Kilen pekar i fardriktningen; kartans vridning laggs pa.
-        ctx.save();
-        ctx.translate(p.x, p.y); ctx.rotate(pos.heading * Math.PI / 180 + v.rot);
-        ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(9, -6); ctx.lineTo(-9, -6); ctx.closePath();
-        ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = o.outline; ctx.stroke();
-        ctx.fillStyle = o.color; ctx.fill();
-        ctx.restore();
+      // En enda symbol: pil i fardriktningen (kartans vridning laggs pa). Utan riktning en prick,
+      // sa att pilen aldrig pekar at ett pahittat hall.
+      ctx.translate(p.x, p.y);
+      ctx.beginPath();
+      if(pos.heading == null) ctx.arc(0, 0, 7, 0, 2 * Math.PI);
+      else{
+        ctx.rotate(pos.heading * Math.PI / 180 + v.rot);
+        ctx.moveTo(0, -13); ctx.lineTo(9, 10); ctx.lineTo(0, 5); ctx.lineTo(-9, 10); ctx.closePath();
       }
-      ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI);
-      ctx.lineWidth = 3; ctx.strokeStyle = o.outline; ctx.stroke();
+      ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.strokeStyle = o.outline; ctx.stroke();
       ctx.fillStyle = o.color; ctx.fill();
       ctx.restore();
     } });
@@ -102,7 +101,7 @@
         }
         jump = true;
         watch = navigator.geolocation.watchPosition(fix, function(e){ if(o.onError) o.onError(e.message || ('error ' + e.code)); }, OPT);
-        // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = ingen kil nar man star still.
+        // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = prick nar man star still.
         const DO = window.DeviceOrientationEvent;
         if(DO && DO.requestPermission) DO.requestPermission().then(function(s){ if(s === 'granted') listenCompass(); }, function(){});
         else if(DO) listenCompass();
