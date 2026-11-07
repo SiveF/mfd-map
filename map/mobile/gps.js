@@ -3,9 +3,9 @@
    noggrannhetscirkel, riktningskil). GPS kraver https (eller localhost).
 
      const g = MapGps(view, { color, outline, onFix(), onError(text) })
-     g.setOn(pa)                 -> maste anropas fran ett knapptryck (iOS fragar om lov). Pa = foljlage
+     g.setOn(pa)                 -> maste anropas fran ett knapptryck (iOS fragar om lov)
      g.on() / g.pos()            -> { lat, lon, acc (m), t (ms), heading (grader, null om okand) } | null
-     g.follow() / g.setFollow(b) -> foljlage: kartan centreras pa positionen
+     g.setFollow(b)              -> kartan centreras pa positionen och vrids sa att riktningen ar uppat
 
    Riktning: GPS-kursen nar man ror sig (annars ar den brus), annars telefonens
    kompass om den finns och iOS fatt lov. Finns ingen ritas ingen kil.
@@ -16,7 +16,7 @@
   const OPT = { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 };
 
   function MapGps(view, o){
-    let watch = null, pos = null, follow = false, compass = null, listening = false;
+    let watch = null, pos = null, follow = false, jump = false, compass = null, listening = false;
 
     view.addLayer({ id: 'gps', visible: true, status: '', draw: function(ctx, v){
       if(watch == null || !pos) return;
@@ -47,16 +47,28 @@
     function fix(g){
       const c = g.coords, moving = c.speed != null && c.speed > MOVING && c.heading != null && !isNaN(c.heading);
       pos = { lat: c.latitude, lon: c.longitude, acc: c.accuracy || 0, t: g.timestamp, moving: moving, heading: moving ? c.heading : compass };
-      if(follow) view.setCenter(pos.lon, pos.lat, view.zoom < 12 ? 14 : view.zoom);
+      if(follow) center();
       else view.redraw();
       if(o.onFix) o.onFix();
+    }
+    // Riktningen uppat. Under ~2 graders andring ligger kartan still, annars darrar den med kompassen.
+    function aim(){
+      if(!follow || !pos || pos.heading == null) return;
+      const r = -pos.heading * Math.PI / 180;
+      if(Math.abs(Math.sin((r - view.rot) / 2)) > 0.017) view.setRotation(r);
+    }
+    // Bara forsta gangen hoppar utzoomad karta in, sa att man kan zooma ut medan den foljer.
+    function center(){
+      view.setCenter(pos.lon, pos.lat, jump && view.zoom < 12 ? 14 : view.zoom);
+      jump = false;
+      aim();
     }
     function onOrient(ev){
       // iOS: webkitCompassHeading (0 = norr, medurs). Ovriga: deviceorientationabsolute.
       const h = ev.webkitCompassHeading != null ? ev.webkitCompassHeading : ev.absolute && ev.alpha != null ? 360 - ev.alpha : null;
       if(h == null) return;
       compass = h;
-      if(pos && !pos.moving){ pos.heading = h; view.redraw(); }
+      if(pos && !pos.moving){ pos.heading = h; aim(); view.redraw(); }
     }
     function listenCompass(){
       if(listening) return;
@@ -79,7 +91,7 @@
         if(b === (watch != null)) return;
         if(!b){
           navigator.geolocation.clearWatch(watch);
-          watch = null; pos = null; follow = false;
+          watch = null; pos = null;
           quietCompass();
           view.redraw();
           return;
@@ -88,7 +100,7 @@
           if(o.onError) o.onError('GPS requires https (page is served over ' + location.protocol + ')');
           return;
         }
-        follow = true;
+        jump = true;
         watch = navigator.geolocation.watchPosition(fix, function(e){ if(o.onError) o.onError(e.message || ('error ' + e.code)); }, OPT);
         // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = ingen kil nar man star still.
         const DO = window.DeviceOrientationEvent;
@@ -97,10 +109,9 @@
       },
       on: function(){ return watch != null; },
       pos: function(){ return pos; },
-      follow: function(){ return follow; },
       setFollow: function(b){
         follow = b;
-        if(b && pos) view.setCenter(pos.lon, pos.lat, view.zoom < 12 ? 14 : view.zoom);
+        if(b){ jump = true; if(pos) center(); }
       },
     };
   }

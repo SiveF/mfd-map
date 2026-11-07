@@ -21,9 +21,9 @@
   <div id="m-app">
     <div id="m-stage">
       <canvas id="m-map"></canvas>
-      <!-- Laddning overst, koordinater (kartans mitt + min position), kompass -->
+      <!-- Laddning overst, koordinater (kartans mitt, min position, vald punkt), kompass -->
       <div id="m-load"><div id="m-load-bar"></div></div>
-      <div id="m-hud"><div id="m-center"></div><div id="m-pos"></div></div>
+      <div id="m-hud"><div id="m-center"></div><div id="m-pos"></div><div id="m-sel"></div></div>
       <div id="map-compass">
         <svg viewBox="-50 -50 100 100" width="72" height="72">
           <g id="map-compass-rot">
@@ -41,11 +41,11 @@
         <div id="m-foot">
           <div id="map-scale"><span id="map-scale-txt"></span></div>
         </div>
-        <!-- Vald punkt: namn, koordinat, hojd, avstand + baring fran min position -->
-        <div id="m-point" hidden></div>
       </div>
       <!-- Vanster kant, slot 1 overst, vertikal text. Tomma slots tar inga tryck -->
       <div id="m-side"></div>
+      <!-- Syns medan ERSE halls ned -->
+      <div id="m-erase" hidden>ERASE</div>
       <!-- Helskarmspanel (MAP, NAV, GOTO, OPTN, DIAG) -->
       <div id="m-panel" hidden></div>
     </div>

@@ -507,6 +507,7 @@
       sketchOn: function(){ return state.sketchOn; },
       setSketchOn: function(b){ state.sketchOn = b; if(!b) sketch = false; save(); changed(); },
       popSketch: function(){ if(state.sketch.length){ state.sketch.pop(); save(); changed(); } },   // telefonens UNDO
+      clearSketch: function(){ state.sketch = []; save(); changed(); },   // telefonens ERSE
       selected: function(){ return edit; },
       deselect: function(){ if(edit){ edit = null; changed(); } },
       del: function(){

@@ -16,27 +16,25 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-load[hidden]{ display:none; }
 #m-load-bar{ height:100%; background:var(--green); }
 
-/* Harkorsets koordinat: fyller overkanten (fontstorleken raknas i app.js). Under den min position. */
+/* Harkorsets koordinat (fontstorleken raknas i app.js). Under den min position och vald punkt. */
 #m-hud{ position:absolute; z-index:2; left:8px; right:8px; top:calc(8px + env(safe-area-inset-top)); pointer-events:none;
         line-height:1.15; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
 #m-center{ white-space:nowrap; overflow:hidden; }
-#m-pos{ color:var(--c-green); font-size:17px; letter-spacing:1px; }
+#m-pos, #m-sel{ font-size:17px; letter-spacing:1px; }
+#m-pos{ color:var(--c-green); }
+#m-sel{ color:var(--c-blue); white-space:pre-line; overflow-wrap:anywhere; }
 
-/* Kompassen syns bara nar kartan ar vriden, under koordinaten. */
-#map-compass{ right:8px; top:calc(10px + var(--m-center-h) + env(safe-area-inset-top)); }
+/* Kompassen syns bara nar kartan ar vriden, under koordinaterna. */
+#map-compass{ right:8px; top:calc(54px + var(--m-center-h) + env(safe-area-inset-top)); }
 #map-compass-up{ font-size:15px; }
 
 #m-lower{ position:absolute; z-index:2; left:0; right:0; bottom:0; display:flex; flex-direction:column; pointer-events:none; }
 #m-foot{ padding:0 8px 4px; }
 #map-scale-txt{ font-size:16px; }
 
-/* Vald punkt (nederkanten lamnar plats for GPS-avlasningen) */
-#m-point{ pointer-events:auto; background:var(--bg); border-top:2px solid var(--green); padding:8px 10px 22px;
-          display:grid; grid-template-columns:1fr auto; gap:2px 8px; font-size:17px; letter-spacing:1px; }
-#m-point[hidden]{ display:none; }
-.mp-name{ font-size:20px; color:var(--c-blue); overflow-wrap:anywhere; }
-.mp-line{ grid-column:1 / -1; overflow-wrap:anywhere; }
-.mp-gps{ color:var(--c-green); }
+#m-erase{ position:absolute; z-index:4; left:0; right:0; top:40%; text-align:center; font-size:72px; letter-spacing:2px; pointer-events:none;
+          -webkit-text-stroke:6px var(--bg); paint-order:stroke fill; }
+#m-erase[hidden]{ display:none; }
 
 /* Slots: liten text, men traffytan (::after) ar lika stor som en vanlig knapp och nar ut over kartan.
    Marginalen ar aldrig lagre an iPhones hemindikator. */
@@ -54,12 +52,12 @@ input{ -webkit-user-select:text; user-select:text; }
 .m-slot small{ position:absolute; bottom:100%; left:50%; transform:translateX(-50%); white-space:nowrap; font-size:14px;
                padding-bottom:3px; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
 .m-slot small:empty{ display:none; }
-/* Vanster kant: slot 1 overst. Tomma slots tar inga tryck. */
-#m-side{ position:absolute; z-index:3; left:0; top:calc(38px + var(--m-center-h) + env(safe-area-inset-top)); bottom:36px; width:44px;
+/* Vanster kant: slot 1 overst, en bokstav per rad. Tomma slots tar inga tryck. */
+#m-side{ position:absolute; z-index:3; left:0; top:calc(70px + var(--m-center-h) + env(safe-area-inset-top)); bottom:36px; width:44px;
          display:flex; flex-direction:column; pointer-events:none; }
-#m-side .m-slot{ flex:1; min-height:0; pointer-events:auto; align-items:center; justify-content:flex-start; padding:0 0 0 2px; }
+#m-side .m-slot{ flex:1; min-height:0; pointer-events:auto; align-items:center; justify-content:flex-start; padding:0 0 0 2px; touch-action:none; }
 #m-side .m-slot::after{ inset:0; }
-#m-side span{ writing-mode:vertical-rl; transform:rotate(180deg); padding:3px 1px; background:var(--bg); }
+#m-side span{ writing-mode:vertical-rl; text-orientation:upright; letter-spacing:0; padding:3px 1px; background:var(--bg); }
 #m-side .m-slot.on span{ background:var(--c-white); }
 
 /* Knappar i panelerna */

@@ -13,7 +13,8 @@
   const S = window.MAP_SOURCES, P = MapMarks.palette(), rgbOf = MapMarks.rgbOf;
   const $ = function(id){ return document.getElementById(id); };
   const KEY_DATA = 'mfdMapMobile:data', KEY_UI = 'mfdMapMobile:ui', KEY_SKETCH = 'mfdMapMobile:sketch';
-  const TOUCH_PX = 24, MAX_FILE = 4e6;                 // traffyta for fingret, exportfilens tak
+  const TOUCH_PX = 24, MAX_FILE = 4e6, HOLD_MS = 2000;  // traffyta for fingret, exportfilens tak, ERSE
+  const SK_COLORS = [['white', 'WHT'], ['red', 'RED'], ['yellow', 'YEL'], ['green', 'GRN'], ['blue', 'BLU'], ['magenta', 'MAG']];
 
   // Lagre tak an datorn: iOS stanger sidan om den tar for mycket minne. Rymmer det som
   // syns pa en telefon aven vriden (~25 rutor), en DEM-ruta ar ~1 MB.
@@ -56,6 +57,7 @@
   try{ ui = JSON.parse(ls.get(KEY_UI)) || {}; }catch(e){ ui = {}; }
   let unit = ui.unit || (data && data.dist) || 'km', ang = ui.ang || (data && data.ang) || 'deg', fmt = ui.fmt || (data && data.fmt) || 'dd';
   let base = ui.base || 'strt', dim = ui.dim || 10, baseOpen = false;
+  let ori = ui.ori || 'nup', skCol = ui.skCol || 'white';   // NUP / GPS / FREE, skissens farg
   const start = ui.lon != null ? ui : (data && data.view) || { lat: 62, lon: 16, zoom: 4, rot: 0 };
   const fmtDist = function(m){ return MapMarks.fmtDist(m, unit); };
   const fmtAng = function(az){ return MapMarks.fmtAng(az, ang).replace(/\D/g, ''); };   // bara siffrorna
@@ -64,7 +66,7 @@
   const view = MapView($('m-map'), { bg: P.bg, lat: start.lat, lon: start.lon, zoom: start.zoom, minZoom: 2, maxZoom: 19,
                                      dpr: Math.min(2, window.devicePixelRatio || 1) });
   view.resize();
-  view.setRotation(start.rot || 0);
+  view.setRotation(ori === 'nup' ? 0 : start.rot || 0);
   window.addEventListener('resize', view.resize);
 
   // Baskartorna utan VECT - den kraver Natural Earth-datan (6-9 MB).
@@ -107,26 +109,34 @@
     colors: { white: P.white, red: P.red, yellow: P.yellow, green: P.green, blue: P.blue, magenta: P.magenta },
     lists: function(){ return lists ? lists.all() : []; },
     upks: function(id){ return lists ? lists.upks(id) : []; } });
-  // Harkorset i kartans mitt (koordinaten overst galler dar) + vit pil mot norr utanfor dess yttre del.
+  // Harkorset i kartans mitt (koordinaten overst galler dar), utanfor det en liten vit pil mot norr
+  // och, nar kartan flyttats fran min position, ett gront streck med pilspets mot positionen.
   view.addLayer({ id: 'center', visible: true, status: '', draw: function(ctx, v){
     if(draw.sketching()) return;
-    const x = v.w / 2, y = v.h / 2;
+    const x = v.w / 2, y = v.h / 2, g = gps.pos();
     ctx.save();
     [[P.bg, 4], [P.white, 1.5]].forEach(function(s){
       ctx.strokeStyle = s[0]; ctx.lineWidth = s[1];
       ctx.beginPath(); ctx.moveTo(x - 16, y); ctx.lineTo(x - 3, y); ctx.moveTo(x + 3, y); ctx.lineTo(x + 16, y);
       ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 3); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 16); ctx.stroke();
     });
-    ctx.translate(x, y); ctx.rotate(v.rot);
-    ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(6, -21); ctx.lineTo(-6, -21); ctx.closePath();
-    ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = P.bg; ctx.stroke();
+    ctx.translate(x, y);
+    const s = g && v.toScreen(g.lon, g.lat);
+    if(s && Math.hypot(s.x - x, s.y - y) > 24){
+      ctx.save();
+      ctx.rotate(Math.atan2(s.x - x, y - s.y));
+      ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, -36); ctx.moveTo(-3, -31); ctx.lineTo(0, -36); ctx.lineTo(3, -31); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.rotate(v.rot);
+    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(3, -20); ctx.lineTo(-3, -20); ctx.closePath();
     ctx.fillStyle = P.white; ctx.fill();
     ctx.restore();
   } });
 
   // ---- Vald punkt ----
-  let selTitle = '', actH = null;
-  const elev = function(lat, lon){ return MapDem.sample(S.dem.url, S.dem.maxZoom, lat, lon); };
+  let selName = '';                                    // namn pa en vald punkt utanfor listan
   const upksOnMap = function(){
     const out = [], seen = new Set();
     draw.state().on.forEach(function(id){
@@ -149,13 +159,15 @@
   }
   const crosshair = function(){ return { x: view.w / 2, y: view.h / 2 }; };
   const atCrosshair = function(){ const c = crosshair(); return view.toLonLat(c.x, c.y); };
-  // Tryck pa en punkt = valj den; annars hamnar aktiva punkten vid harkorset, inte under fingret.
+  // Tryck pa en punkt = valj den. Annars: finns en aktiv punkt avmarkeras den, annars hamnar
+  // en ny vid harkorset, inte under fingret.
   // Samma beslut for musklick (pointSelect) och fingertryck (MapTouch).
   function pick(p){
     const h = hitAt(p);
     if(h && h.pt) lists.select(h.pt);
-    else if(h){ selTitle = 'UPK ' + h.upk.label; sel.set(h.upk, 'upk'); }
-    else{ selTitle = 'POINT'; sel.set(atCrosshair()); }
+    else if(h){ selName = 'UPK ' + h.upk.label; sel.set(h.upk, 'upk'); }
+    else if(sel.get()) sel.clear();
+    else{ selName = ''; sel.set(atCrosshair()); }
     return true;
   }
   const sel = MapTools.pointSelect(view, { color: P.blue, outline: P.bg,
@@ -163,25 +175,31 @@
     pick: pick,
     onChange: function(pt, src){
       if(src !== 'list' && lists.selected()) lists.select(null, true);
-      actH = null;
-      if(pt){
-        const k = pt.lat + ',' + pt.lon;
-        elev(pt.lat, pt.lon).then(function(h){ const a = sel.get(); if(a && a.lat + ',' + a.lon === k){ actH = h; renderPoint(); } });
-      }
-      renderPoint();
+      renderHud();
     } });
   lists = MapLists({ onChange: function(){ view.redraw(); },
                      onSelect: function(pt){ sel.set(pt, 'list'); } });
 
   const gps = MapGps(view, { color: P.green, outline: P.bg,
-    onFix: function(){ MapDiag.clear('GPS-01'); renderPoint(); renderHud(); refreshBar(); },
+    onFix: function(){ MapDiag.clear('GPS-01'); renderHud(); refreshBar(); },
     onError: function(t){ MapDiag.raise('GPS-01', t); refreshBar(); } });
+
+  // NUP: norr upp, gar inte att vrida. GPS: foljer positionen och riktningen (om GPS ar pa), tva
+  // fingrar zoomar bara. FREE: allt gar. Flyttar man kartan i GPS-laget hamnar man i FREE.
+  function setOri(m){
+    ori = m;
+    if(m === 'nup') view.setRotation(0);
+    gps.setFollow(m === 'gps');
+    refreshBar(); saveUi();
+  }
+  const release = function(){ if(ori === 'gps') setOri('free'); };
+  gps.setFollow(ori === 'gps');
 
   // RLR: som pa datorn, men pekaren ar harkorset. Finns en aktiv punkt borjar linjalen dar,
   // annan ande foljer harkorset tills man trycker. Andarna gar att dra.
-  const ruler = MapTools.ruler(view, { color: P.white, outline: P.bg, label: function(a, b, fromPt){
+  const ruler = MapTools.ruler(view, { color: P.white, outline: P.bg, label: function(a, b){
     const g = MapCoords.inverse(a.lat, a.lon, b.lat, b.lon);
-    return fmtDist(g.dist) + (fromPt ? '   ' + fmtAng(g.az) : '');
+    return fmtDist(g.dist) + '   ' + fmtAng(g.az);
   } });
   function setRuler(on){
     view.pointer = on ? crosshair() : null;
@@ -194,25 +212,12 @@
       if(ruler.active()) ruler.click(crosshair()); else pick(p);
     },
     grab: function(p){ return draw.sketching() || ruler.active() ? view.grabAt(p) : null; },
-    moved: function(){ if(gps.follow()){ gps.setFollow(false); refreshBar(); } },
+    moved: release,
+    lock: function(){ return { noRot: ori !== 'free', noPan: ori === 'gps' }; },
   });
-  function renderPoint(){
-    const el = $('m-point'), a = sel.get();
-    el.hidden = !a;
-    if(!a) return;
-    const pt = lists.selected();
-    el.innerHTML = '';
-    const add = function(cls, text, tag){ const d = document.createElement(tag || 'div'); d.className = cls; d.textContent = text; el.appendChild(d); return d; };
-    add('mp-name', pt ? pt.name : selTitle);
-    add('m-btn', 'X', 'button').addEventListener('click', function(){ sel.clear(); });
-    add('mp-line', MapCoords.format(fmt, a.lat, a.lon));
-    add('mp-line', 'ELEV ' + (actH == null ? '--' : Math.round(actH)));
-    const g = gps.pos(), inv = g && MapCoords.inverse(g.lat, g.lon, a.lat, a.lon);
-    if(inv) add('mp-line mp-gps', 'DIST ' + fmtDist(inv.dist) + '   BRG ' + fmtAng(inv.az));
-  }
 
   // ---- Overst, kompass, skala, laddning ----
-  // Koordinaten fyller overkanten. Storleken raknas bara nar textens langd eller bredden andras,
+  // Koordinaten tar 85 % av overkanten. Storleken raknas bara nar textens langd eller bredden andras,
   // annars skulle den hoppa med varje siffra.
   const fitCtx = document.createElement('canvas').getContext('2d');
   let fitKey = '';
@@ -221,16 +226,18 @@
     if(key === fitKey || !w) return;
     fitKey = key;
     fitCtx.font = '100px ViperDisplay';
-    el.style.fontSize = Math.min(44, Math.floor(100 * w / fitCtx.measureText(t.replace(/\d/g, '8')).width)) + 'px';
+    el.style.fontSize = Math.min(38, Math.floor(85 * w / fitCtx.measureText(t.replace(/\d/g, '8')).width)) + 'px';
     $('m-stage').style.setProperty('--m-center-h', el.offsetHeight + 'px');
   }
   function renderHud(){
-    const t = MapCoords.format(fmt, view.lat, view.lon), g = gps.pos();
+    const t = MapCoords.format(fmt, view.lat, view.lon), g = gps.pos(), a = sel.get(), pt = lists.selected();
+    const name = pt ? pt.name : selName;
     $('m-center').textContent = t;
     fitCenter($('m-center'), t);
     $('m-pos').textContent = g ? MapCoords.format(fmt, g.lat, g.lon) : '';
+    $('m-sel').textContent = a ? MapCoords.format(fmt, a.lat, a.lon) + (name ? '\n' + name : '') : '';
   }
-  $('map-compass').addEventListener('click', function(){ view.setRotation(0); });
+  $('map-compass').addEventListener('click', function(){ release(); view.setRotation(0); });
   // Kartleverantorer och krediter, visas pa MAP-sidan.
   const credits = function(){
     const a = MAPS[base].attribution;
@@ -263,16 +270,12 @@
   });
 
   // ---- Slots: 6 i bottenmarginalen, 6 utmed vanster kant (overst forst). Utan label = tom. ----
-  const SIDE_EMPTY = function(){ return { side: true }; };
+  const inSketch = function(t){ return function(){ return draw.sketching() ? t : ''; }; };
   const SLOTS = [
     { label: 'MAP', panel: 'map' },
     { label: 'NAV', panel: 'nav', also: 'goto' },
     {},
-    { label: 'SKCH', on: function(){ return draw.sketching(); }, act: function(){
-        const b = !draw.sketching();
-        draw.setSketch(b);
-        if(b){ showPanel(null); sel.clear(); setRuler(false); gps.setFollow(false); }   // kartan ska ligga still under fingret
-      } },
+    {},
     { label: 'GPS', on: function(){ return gps.on(); },
       // Felmarginal | sekunder sedan senaste fix.
       note: function(){
@@ -280,17 +283,30 @@
         const g = gps.pos();
         return g ? Math.round(g.acc) + ' | ' + Math.max(0, Math.round((Date.now() - g.t) / 1000)) : '-- | --';
       },
-      act: function(){ gps.setOn(!gps.on()); renderPoint(); renderHud(); } },
+      act: function(){ gps.setOn(!gps.on()); renderHud(); } },
     { label: 'OPTN', panel: 'optn', also: 'diag', warn: function(){ return MapDiag.active().length > 0; } },
-    SIDE_EMPTY(), SIDE_EMPTY(),
+    { side: true, label: function(){ return ori.toUpperCase(); },
+      act: function(){ setOri({ nup: 'gps', gps: 'free', free: 'nup' }[ori]); } },
+    { side: true, label: 'SKCH', on: function(){ return draw.sketching(); }, act: function(){
+        const b = !draw.sketching();
+        draw.setSketch(b);
+        if(b){ showPanel(null); sel.clear(); setRuler(false); release(); }   // kartan ska ligga still under fingret
+      } },
     { side: true, label: 'RLR', on: function(){ return ruler.active(); }, act: function(){
         const b = !ruler.active();
         if(b) draw.setSketch(false);
         setRuler(b);
       } },
-    SIDE_EMPTY(), SIDE_EMPTY(),
-    // Det aktiva verktygets funktion, som Select functions pa datorn.
-    { side: true, label: function(){ return draw.sketching() ? 'UNDO' : ''; }, act: function(){ draw.popSketch(); } },
+    // Skissens funktioner, som Select functions pa datorn. Tryck = nasta farg, texten har fargen.
+    { side: true, color: function(){ return P[skCol]; },
+      label: function(){ return draw.sketching() ? SK_COLORS.find(function(c){ return c[0] === skCol; })[1] : ''; },
+      act: function(){
+        const i = SK_COLORS.findIndex(function(c){ return c[0] === skCol; });
+        skCol = SK_COLORS[(i + 1) % SK_COLORS.length][0];
+        draw.setColor(skCol);
+      } },
+    { side: true, label: inSketch('ERSE'), hold: function(){ draw.clearSketch(); } },
+    { side: true, label: inSketch('UNDO'), act: function(){ draw.popSketch(); } },
   ];
   let panel = null;
   function button(parent, label, sub, cls, act){
@@ -311,6 +327,15 @@
       if(d.panel) showPanel(panel === d.panel ? null : d.panel); else if(d.act) d.act();
       saveUi(); refreshBar();
     });
+    if(d.hold){
+      let t = null;
+      const stop = function(){ clearTimeout(t); $('m-erase').hidden = true; };
+      d.el.addEventListener('pointerdown', function(){
+        $('m-erase').hidden = false;
+        t = setTimeout(function(){ d.hold(); stop(); }, HOLD_MS);
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(e){ d.el.addEventListener(e, stop); });
+    }
     $(d.side ? 'm-side' : 'm-bar').appendChild(d.el);
   });
   function refreshBar(){
@@ -319,6 +344,7 @@
       const open = !!d.panel && (panel === d.panel || panel === d.also);
       d.el.firstChild.textContent = label;
       d.el.style.visibility = label ? '' : 'hidden';
+      d.el.style.color = d.color ? d.color() : '';
       d.el.lastChild.textContent = d.note ? d.note() : '';
       d.el.classList.toggle('current', open);
       d.el.classList.toggle('on', !!d.on && d.on());
@@ -417,7 +443,7 @@
         const b = document.createElement('button');
         b.className = 'm-btn m-pt ' + choice(pt === lists.selected());
         b.addEventListener('click', function(){
-          gps.setFollow(false);
+          release();
           view.setCenter(pt.lon, pt.lat, view.zoom < 11 ? 13 : view.zoom);
           lists.select(pt);
           showPanel(null);
@@ -442,9 +468,9 @@
         if(!p){ MapDiag.raise('CRD-02', t); return; }      // syns som gul OPTN, texten star kvar
         MapDiag.clear('CRD-02');
         inp.blur();
-        gps.setFollow(false);
+        release();
         view.setCenter(p.lon, p.lat, view.zoom < 11 ? 13 : view.zoom);
-        selTitle = 'GOTO';
+        selName = '';
         sel.set(p);
         showPanel(null);
       });
@@ -455,12 +481,12 @@
     optn: function(el){
       const c = rowsEl(el, 'm-grid');
       MapCoords.FORMATS.forEach(function(x){
-        button(c, x.short || x.label, '', choice(x.id === fmt), function(){ fmt = x.id; again(); renderPoint(); renderHud(); });
+        button(c, x.short || x.label, '', choice(x.id === fmt), function(){ fmt = x.id; again(); renderHud(); });
       });
       textEl(el, 'm-head', 'ANGLE');
       const a = rowsEl(el, 'm-grid');
       [['deg', 'DEG'], ['mil', 'MIL']].forEach(function(x){
-        button(a, x[1], '', choice(x[0] === ang), function(){ ang = x[0]; again(); renderPoint(); view.redraw(); });
+        button(a, x[1], '', choice(x[0] === ang), function(){ ang = x[0]; again(); view.redraw(); });
       });
       textEl(el, 'm-head', 'BATTERY');
       textEl(el, 'm-value', batteryLeft());
@@ -493,8 +519,8 @@
       unit = d.dist || unit; ang = d.ang || ang; fmt = d.fmt || fmt;
       lists.select(null, true); sel.clear();
       lists.load(); draw.load();
-      gps.setFollow(false);
-      if(d.view){ view.setCenter(d.view.lon, d.view.lat, d.view.zoom); view.setRotation(d.view.rot || 0); }
+      release();
+      if(d.view){ view.setCenter(d.view.lon, d.view.lat, d.view.zoom); view.setRotation(ori === 'nup' ? 0 : d.view.rot || 0); }
       showPanel(null); saveUi();
     }, function(e){ importFail(e.message); });
   });
@@ -503,7 +529,7 @@
   function saveUi(){
     const ov = {};
     Object.keys(OVERLAYS).forEach(function(k){ ov[k] = OVERLAYS[k].l.visible; });
-    ls.set(KEY_UI, JSON.stringify(Object.assign(ui, { unit: unit, ang: ang, fmt: fmt, base: base, dim: dim, ov: ov,
+    ls.set(KEY_UI, JSON.stringify(Object.assign(ui, { unit: unit, ang: ang, fmt: fmt, base: base, dim: dim, ov: ov, ori: ori, skCol: skCol,
       lon: view.lon, lat: view.lat, zoom: view.zoom, rot: view.rot })));
   }
   document.addEventListener('visibilitychange', function(){ if(document.hidden) saveUi(); });
@@ -512,6 +538,7 @@
   // ---- Start ----
   applyBase();
   lists.load(); draw.load();
+  draw.setColor(skCol);
   if(ui.listId !== undefined){
     const st = lists.state(), i = st.lists.findIndex(function(l){ return l.id === ui.listId; });
     st.active = i < 0 ? null : i;

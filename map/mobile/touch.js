@@ -3,10 +3,11 @@
    tva fingrar = nypa (zoom) + vrida + flytta, kort tryck = onTap.
    MapView rors inte - datorns musstyrning ligger kvar dar.
 
-     MapTouch(view, { tap(p), moved(), grab(p) })   moved = anvandaren flyttade kartan
+     MapTouch(view, { tap(p), moved(), grab(p), lock() })   moved = ett finger flyttade kartan
+     lock() -> { noRot, noPan }: tva fingrar far inte vrida / flytta (da zoomar de kring mitten)
      grab(p) -> { move(p), up() } | null: verktyg (skissen) tar ett fingers drag. Fragas forst
      nar fingret flyttat sig, sa en nypning som borjar med ett finger inte ritar nagot.
-     MapTouch.pair(view, s, a, b)          ett steg i tvafingersgesten (testas i map/check.js)
+     MapTouch.pair(view, s, a, b, lock)    ett steg i tvafingersgesten (testas i map/check.js)
 
    Vridningen slapps forst nar fingrarna vridit 8 grader tillsammans - annars
    vrider sig kartan vid varje nypning.
@@ -19,16 +20,16 @@
              ang: Math.atan2(b.y - a.y, b.x - a.x), rotOn: false, acc: 0 };
   }
   // Punkten under fingrarnas mittpunkt foljer med genom zoom och vridning.
-  function pair(v, s, a, b){
+  function pair(v, s, a, b, lock){
     const n = pairState(a, b), ll = v.toLonLat(s.x, s.y);
     let da = n.ang - s.ang;
     if(da > Math.PI) da -= 2 * Math.PI; else if(da < -Math.PI) da += 2 * Math.PI;
     s.acc += da;
     if(!s.rotOn && Math.abs(s.acc) >= ROT_START) s.rotOn = true;
     v.zoom = Math.max(v.minZoom, Math.min(v.maxZoom, v.zoom + Math.log2(n.d / s.d)));
-    if(s.rotOn) v.setRotation(v.rot + da);
-    const p = v.toScreen(ll.lon, ll.lat);
-    v.panBy(n.x - p.x, n.y - p.y);
+    if(s.rotOn && !(lock && lock.noRot)) v.setRotation(v.rot + da);
+    if(lock && lock.noPan) v.redraw();
+    else{ const p = v.toScreen(ll.lon, ll.lat); v.panBy(n.x - p.x, n.y - p.y); }
     s.x = n.x; s.y = n.y; s.d = n.d; s.ang = n.ang;
   }
 
@@ -52,8 +53,7 @@
     c.addEventListener('touchmove', function(ev){
       ev.preventDefault();
       if(two && ev.touches.length === 2){
-        pair(v, two, xy(ev.touches[0]), xy(ev.touches[1]));
-        if(o.moved) o.moved();
+        pair(v, two, xy(ev.touches[0]), xy(ev.touches[1]), o.lock && o.lock());
       }
       else if(one && ev.touches.length === 1){
         const p = xy(ev.touches[0]);
