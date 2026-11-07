@@ -255,3 +255,8 @@ body.map-mode .osb .lbl svg{ display:block; transform:translateY(8px); }
 .ls-btn{ display:inline-block; padding:6px 4px; font-size:20px; letter-spacing:1px; }
 .ls-btn.on{ color:var(--c-blue); }
 .ls-btn.right{ margin-left:auto; }                 /* RTE langst till hoger i huvudet */
+
+/* OPTN: inloggning till Lantmateriets kartor */
+.lm-login{ margin-top:16px; }
+.lm-login > div:last-child{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+.lm-inp{ flex:1 1 0; min-width:0; caret-color:var(--c-white); padding:4px 6px; border:1px solid var(--c-white); }

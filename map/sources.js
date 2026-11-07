@@ -9,6 +9,9 @@
   // blankTile=false: saknad Esri-ruta = fel (da forstoras narmaste niva) i stallet
   // for en "Map data not yet available"-bild.
   const esri = function(svc){ return ESRI + svc + '/MapServer/tile/{z}/{y}/{x}?blankTile=false'; };
+  // Lantmateriets Topografisk webbkarta Nedladdning, raster: fri, kraver konto pa Geotorget.
+  // Lases direkt ur filen (map/gpkg.js). Inloggningen matas in i OPTN - aldrig har.
+  const LM = 'https://dl1.lantmateriet.se/karta/topowebb/data/';
 
 window.MAP_SOURCES = {
   // Vektorrutor i realtid (map/vtiles.js): WATER, ROADS, NAMES och husen till LOS.
@@ -61,6 +64,10 @@ window.MAP_SOURCES = {
         { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', subdomains: 'abc', maxZoom: 17 } ] },
       { id: 'etopo', label: 'ESRI TOPO', short: 'ETOP', dimmer: true, attribution: 'Esri, HERE, Garmin, USGS, © OpenStreetMap', layers: [
         { url: esri('World_Topo_Map'), maxZoom: 19 } ] },
+      { id: 'lm', label: 'LANTMÄTERIET', short: 'LM', dimmer: true, attribution: '© Lantmäteriet', layers: [
+        { gpkg: LM + 'topowebb-3857.gpkg', maxZoom: 19 } ] },
+      { id: 'lmgr', label: 'LANTMÄTERIET GRÅ', short: 'LMGR', dimmer: true, attribution: '© Lantmäteriet', layers: [
+        { gpkg: LM + 'topowebb_nedtonad-3857.gpkg', maxZoom: 19 } ] },
     ] },
     { head: 'LASER', maps: [
       // Terrangskuggning ur laserdata (Sverige: Lantmateriets 1 m-markmodell via Mapterhorn).

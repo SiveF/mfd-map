@@ -35,6 +35,8 @@
      L.dim (0-1) = extra ljusstyrka ovanpa filter (dimmern for SAT). blend = canvas
      globalCompositeOperation for overlagg; standard vanlig ritning.
      URL med {key} och tom nyckel -> lagret ritar inget, status 'NKEY'.
+     gpkg = adress till en GeoPackage (map/gpkg.js) i stallet for url; utan giltig
+     inloggning ritas inget, status 'NKEY'.
      Saknas en ruta (laddfel) eller laddar den fortfarande ritas narmaste
      overliggande niva som finns, forstorad - aldrig ett svart hal. Kallor som
      annars svarar med en "saknas"-bild (Esri) ska darfor ge fel, t.ex. med
@@ -44,9 +46,11 @@
     let okCount = 0;
     const subs = o.subdomains || 'abc';
     const maxZ = o.maxZoom == null ? 19 : o.maxZoom;
-    const noKey = o.url.indexOf('{key}') >= 0 && !o.key;
+    const src = o.gpkg ? root.MapGpkg(o.gpkg) : null;
+    const noKey = !src && o.url.indexOf('{key}') >= 0 && !o.key;
     const L = { id: o.id || 'tiles', frame: true, visible: o.visible !== false, status: noKey ? 'NKEY' : '',
                 attribution: o.attribution || '' };
+    if(src) root.MapGpkg.onToken(function(){ cache.clear(); okCount = 0; L.status = ''; if(L.redraw) L.redraw(); });
 
     function url(z, x, y){
       return o.url.replace('{s}', subs[(x + y) % subs.length]).replace('{z}', z)
@@ -70,10 +74,24 @@
       let img = cache.get(k);
       if(img){ cache.delete(k); cache.set(k, img); return img; }   // LRU: senast anvand sist
       img = new Image();
-      img.onload = function(){ okCount++; L.status = ''; if(L.redraw) L.redraw(); };
+      img.onload = function(){ okCount++; L.status = ''; if(img._blob) URL.revokeObjectURL(img.src); if(L.redraw) L.redraw(); };
       // ponytail: offline mitt i en session syns inte som OFFL (saknade rutor ar normalt).
       img.onerror = function(){ if(!okCount) L.status = 'OFFL'; if(L.redraw) L.redraw(); };
-      img.src = url(z, x, y);
+      if(src){
+        // Bild utan src raknas som complete - _wait = rutan ar pa vag fran filen.
+        img._wait = true;
+        src.tile(z, x, y).then(function(b){
+          img._wait = false;
+          if(b){ img._blob = true; img.src = URL.createObjectURL(b); }   // annars finns rutan inte
+          else if(L.redraw) L.redraw();
+        }, function(e){
+          img._wait = false;
+          if(e.status === 401 || e.status === 403) L.status = 'NKEY';
+          else if(!okCount) L.status = 'OFFL';
+          if(L.redraw) L.redraw();
+        });
+      }
+      else img.src = url(z, x, y);
       cache.set(k, img);
       // ponytail: minnescache med tak, ingen diskcache - varje start hamtar om.
       if(cache.size > limits.rasterTiles) cache.delete(cache.keys().next().value);
@@ -82,7 +100,9 @@
 
     L.draw = function(ctx, view){
       if(noKey) return;
-      const z = Math.max(0, Math.min(maxZ, Math.round(view.zoom)));
+      if(src && !src.ready()){ L.status = 'NKEY'; L.loading = null; return; }
+      const top = src && src.maxZoom != null ? src.maxZoom : maxZ;
+      const z = Math.max(0, Math.min(top, Math.round(view.zoom)));
       const ts = 256 * Math.pow(2, view.zoom - z), n = Math.pow(2, z), tl = view.topLeft();
       // t.ex. 'brightness(.6)' eller 'invert(1) hue-rotate(180deg)' for ljusa kallor, plus dimmern
       const f = ((o.filter || '') + (L.dim != null && L.dim !== 1 ? ' brightness(' + L.dim + ')' : '')).trim();
@@ -94,7 +114,7 @@
         for(let x = x0; x <= x1; x++){
           const img = tile(z, ((x % n) + n) % n, y);   // x lindas runt datumlinjen
           total++;
-          if(img.complete) done++;                     // complete = laddad ELLER misslyckad
+          if(img.complete && !img._wait) done++;       // complete = laddad ELLER misslyckad
           // 1 px overlapp - annars syns tunna sommar vid brakzoom
           const dx = Math.floor(x * ts - tl.x), dy = Math.floor(y * ts - tl.y), dw = Math.ceil(ts) + 1;
           if(img.complete && img.naturalWidth){ ctx.drawImage(filtered(img, f), dx, dy, dw, dw); continue; }
@@ -103,7 +123,7 @@
           for(let d = 1; d <= 6 && z - d >= 0; d++){
             const k = Math.pow(2, d), up = tile(z - d, Math.floor(wx / k), Math.floor(y / k));
             if(up.complete && up.naturalWidth){
-              const sw = 256 / k;
+              const sw = up.naturalWidth / k;
               ctx.drawImage(filtered(up, f), (wx % k) * sw, (y % k) * sw, sw, sw, dx, dy, dw, dw);
               break;
             }

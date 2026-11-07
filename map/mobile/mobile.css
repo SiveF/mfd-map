@@ -102,3 +102,4 @@ input{ -webkit-user-select:text; user-select:text; }
 .m-input::placeholder{ color:var(--green-dim); }
 .m-form{ display:grid; grid-template-columns:1fr auto; gap:3px; }
 .m-form .m-btn{ min-width:56px; }
+.m-login{ grid-template-columns:1fr; margin-bottom:3px; }

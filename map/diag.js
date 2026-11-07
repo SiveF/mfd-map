@@ -22,7 +22,7 @@
     ['DATA-01', 'Landdata saknas eller kunde inte laddas (data/land.js)'],
     ['DATA-02', 'Sjödata saknas eller kunde inte laddas (data/lakes.js)'],
     ['DATA-04', 'Gränsdata saknas eller kunde inte laddas (data/borders.js, data/regions.js)'],
-    ['TILE-01', 'En kartkälla kräver API-nyckel men ingen är angiven (config.js)'],
+    ['TILE-01', 'Lantmäteriet: inloggning saknas eller är fel (OPTN)'],
     ['TILE-02', 'Kartrutor, vektorrutor (WATER/ROADS/NAMES) eller höjddata kunde inte hämtas (offline eller servern svarar inte)'],
     ['STOR-01', 'Listorna kunde inte sparas'],
     ['STOR-02', 'Listorna kunde inte läsas (filen är skadad)'],

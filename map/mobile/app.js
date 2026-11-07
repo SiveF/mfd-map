@@ -24,7 +24,7 @@
   // Bara det som kan handa pa telefonen, pa engelska. Datorns katalog i diag.js rors inte.
   MapDiag.CATALOG.splice(0, MapDiag.CATALOG.length,
     ['JS-01', 'Script error'], ['JS-02', 'Unhandled async error'], ['RES-01', 'File failed to load'], ['FONT-01', 'Font failed to load'],
-    ['TILE-02', 'Map tiles or elevation data unavailable'], ['STOR-02', 'Stored data is corrupt'], ['CRD-02', 'GOTO: invalid coordinate'],
+    ['TILE-01', 'Lantmäteriet: login missing or wrong (OPTN)'], ['TILE-02', 'Map tiles or elevation data unavailable'], ['STOR-02', 'Stored data is corrupt'], ['CRD-02', 'GOTO: invalid coordinate'],
     ['IMP-01', 'Import failed, previous data kept'], ['SKC-01', 'Sketch could not be saved'], ['GPS-01', 'No GPS position'],
     ['LOS-01', 'LOS: no elevation data'], ['LOS-02', 'LOS: trees or buildings missing']);
 
@@ -58,6 +58,7 @@
   try{ ui = JSON.parse(ls.get(KEY_UI)) || {}; }catch(e){ ui = {}; }
   let unit = ui.unit || (data && data.dist) || 'km', ang = ui.ang || (data && data.ang) || 'deg', fmt = ui.fmt || (data && data.fmt) || 'dd';
   let base = ui.base || 'strt', dim = ui.dim || 10, baseOpen = false;
+  if(ui.lm) MapGpkg.setToken(ui.lm);                     // Lantmateriet-inloggningen, bara pa telefonen
   let ori = ui.ori || 'nup', skCol = ui.skCol || 'white';   // NUP / GPS / FREE, skissens farg
   const start = ui.lon != null ? ui : (data && data.view) || { lat: 62, lon: 16, zoom: 4, rot: 0 };
   const fmtDist = function(m){ return MapMarks.fmtDist(m, unit); };
@@ -296,17 +297,20 @@
     $('map-scale-txt').textContent = String(Number(MapScale.meters(v.zoom, v.toLonLat(v.w / 2, v.h).lat, v.w).toPrecision(2)));
     let done = 0, total = 0;
     const off = [];
+    let noLogin = false;
     v.layers.forEach(function(l){
       if(!l.visible) return;
       if(l.loading){ done += l.loading.done; total += l.loading.total; }
       if(l.status === 'OFFL') off.push(l.id);
+      if(l.status === 'NKEY') noLogin = true;
     });
     $('m-load').hidden = done >= total;
     if(total) $('m-load-bar').style.width = Math.floor(done / total * 100) + '%';
-    const st = off.join(',');
+    const st = off.join(',') + (noLogin ? '|login' : '');
     if(st !== lastStatus){
       lastStatus = st;
-      if(st) MapDiag.raise('TILE-02', st); else MapDiag.clear('TILE-02');
+      if(off.length) MapDiag.raise('TILE-02', off.join(',')); else MapDiag.clear('TILE-02');
+      if(noLogin) MapDiag.raise('TILE-01', MAPS[base].short); else MapDiag.clear('TILE-01');
     }
   });
 
@@ -548,6 +552,27 @@
       [['auto', 'AUTO'], ['port', 'PORT'], ['land', 'LAND']].forEach(function(x){
         button(sc, x[1], '', choice(x[0] === screenMode), function(){ screenMode = x[0]; applyScreen(); again(); });
       });
+      textEl(el, 'm-head', 'LANTMÄTERIET' + (MapGpkg.hasToken() ? ' - SAVED' : ''));
+      const lm = document.createElement('form');
+      lm.className = 'm-form m-login';
+      const lmIn = function(hint, type){
+        const i = document.createElement('input');
+        i.className = 'm-input'; i.placeholder = hint; i.type = type; i.spellcheck = false;
+        i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off');
+        lm.appendChild(i);
+        return i;
+      };
+      const lmU = lmIn('USER', 'text'), lmP = lmIn('PASSWORD', 'password');
+      lm.addEventListener('submit', function(ev){
+        ev.preventDefault();
+        if(!lmU.value || !lmP.value) return;
+        ui.lm = MapGpkg.token(lmU.value.trim(), lmP.value);
+        MapGpkg.setToken(ui.lm); saveUi(); again();
+      });
+      el.appendChild(lm);
+      const lmRow = rowsEl(el, 'm-grid');
+      button(lmRow, 'SAVE', '', '', function(){ lm.requestSubmit ? lm.requestSubmit() : lm.dispatchEvent(new Event('submit', { cancelable: true })); });
+      if(ui.lm) button(lmRow, 'CLR', '', '', function(){ delete ui.lm; MapGpkg.setToken(''); saveUi(); again(); });
       textEl(el, 'm-head', 'BATTERY');
       textEl(el, 'm-value', batteryLeft());
       button(rowsEl(el, 'm-grid'), 'DIAG', '', MapDiag.active().length ? 'warn' : '', function(){ showPanel('diag'); }).style.marginTop = '14px';
