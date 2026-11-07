@@ -133,27 +133,28 @@
     lists: function(){ return lists ? lists.all() : []; },
     upks: function(id){ return lists ? lists.upks(id) : []; } });
   // Harkorset i kartans mitt (koordinaten overst galler dar), utanfor det en liten vit pil mot norr
-  // och, nar kartan flyttats fran min position, ett gront streck med pilspets mot positionen.
+  // och, nar kartan flyttats fran min position, ett gront streck mot positionen. 1 px svart runt allt.
   view.addLayer({ id: 'center', visible: true, status: '', draw: function(ctx, v){
     if(draw.sketching()) return;
     const x = v.w / 2, y = v.h / 2, g = gps.pos();
+    // Streck uppat fran mitten, mellan radierna r0 och r1.
+    const bar = function(r0, r1, w, col){
+      ctx.fillStyle = P.bg; ctx.fillRect(-w / 2 - 1, -r1 - 1, w + 2, r1 - r0 + 2);
+      ctx.fillStyle = col; ctx.fillRect(-w / 2, -r1, w, r1 - r0);
+    };
     ctx.save();
-    [[P.bg, 4], [P.white, 1.5]].forEach(function(s){
-      ctx.strokeStyle = s[0]; ctx.lineWidth = s[1];
-      ctx.beginPath(); ctx.moveTo(x - 16, y); ctx.lineTo(x - 3, y); ctx.moveTo(x + 3, y); ctx.lineTo(x + 16, y);
-      ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 3); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 16); ctx.stroke();
-    });
     ctx.translate(x, y);
+    for(let i = 0; i < 4; i++){ bar(3, 16, 1.5, P.white); ctx.rotate(Math.PI / 2); }
     const s = g && v.toScreen(g.lon, g.lat);
-    if(s && Math.hypot(s.x - x, s.y - y) > 24){
+    if(s && Math.hypot(s.x - x, s.y - y) > 38){
       ctx.save();
       ctx.rotate(Math.atan2(s.x - x, y - s.y));
-      ctx.strokeStyle = P.green; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, -36); ctx.moveTo(-3, -31); ctx.lineTo(0, -36); ctx.lineTo(3, -31); ctx.stroke();
+      bar(24, 38, 2, P.green);
       ctx.restore();
     }
     ctx.rotate(v.rot);
-    ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(3, -20); ctx.lineTo(-3, -20); ctx.closePath();
+    ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(3, -24); ctx.lineTo(-3, -24); ctx.closePath();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = P.bg; ctx.stroke();
     ctx.fillStyle = P.white; ctx.fill();
     ctx.restore();
   } });
