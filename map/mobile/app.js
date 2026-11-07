@@ -3,7 +3,8 @@
    planerats pa datorn. Kartmotorn (MapView, lager, MapLists, MapDraw, MapMarks)
    ar samma som datorns; har finns bara knappmeny, paneler, vald punkt och import.
 
-   Importerad data ANDRAS ALDRIG: MapStore nedan laser ur exportfilen, och en ny import
+   Importerad data ANDRAS ALDRIG: MapStore nedan laser ur exporten (EXPT pa datorn hamtas
+   sjalv fran gisten, se pull; IMPT tar en fil), och en ny import
    ersatter den i sin helhet. Det enda som skapas pa telefonen ar SKCH och de egna valen
    (karta, lager, vilken lista som visas) - de ligger for sig i KEY_SKETCH och KEY_UI och
    gar aldrig tillbaka till datorn.
@@ -25,7 +26,7 @@
   MapDiag.CATALOG.splice(0, MapDiag.CATALOG.length,
     ['JS-01', 'Script error'], ['JS-02', 'Unhandled async error'], ['RES-01', 'File failed to load'], ['FONT-01', 'Font failed to load'],
     ['TILE-01', 'Lantmäteriet: login missing or wrong (OPTN)'], ['TILE-02', 'Map tiles or elevation data unavailable'], ['STOR-02', 'Stored data is corrupt'], ['CRD-02', 'GOTO: invalid coordinate'],
-    ['IMP-01', 'Import failed, previous data kept'], ['SKC-01', 'Sketch could not be saved'], ['GPS-01', 'No GPS position'],
+    ['IMP-01', 'Import failed, previous data kept'], ['SYN-01', 'Could not fetch export from computer, previous data kept'], ['SKC-01', 'Sketch could not be saved'], ['GPS-01', 'No GPS position'],
     ['LOS-01', 'LOS: no elevation data'], ['LOS-02', 'LOS: trees or buildings missing']);
 
   // localStorage kan kasta (privat lage, full lagring).
@@ -58,6 +59,7 @@
   try{ ui = JSON.parse(ls.get(KEY_UI)) || {}; }catch(e){ ui = {}; }
   let unit = ui.unit || (data && data.dist) || 'km', ang = ui.ang || (data && data.ang) || 'deg', fmt = ui.fmt || (data && data.fmt) || 'dd';
   let base = ui.base || 'strt', dim = ui.dim || 10, baseOpen = false;
+  MapGpkg.diskTiles = 4000;                              // ~100 MB sparade kartrutor
   if(ui.lm) MapGpkg.setToken(ui.lm);                     // Lantmateriet-inloggningen, bara pa telefonen
   let ori = ui.ori || 'nup', skCol = ui.skCol || 'white';   // NUP / GPS / FREE, skissens farg
   const start = ui.lon != null ? ui : (data && data.view) || { lat: 62, lon: 16, zoom: 4, rot: 0 };
@@ -555,14 +557,14 @@
       textEl(el, 'm-head', 'LANTMÄTERIET' + (MapGpkg.hasToken() ? ' - SAVED' : ''));
       const lm = document.createElement('form');
       lm.className = 'm-form m-login';
-      const lmIn = function(hint, type){
+      const lmIn = function(form, hint, type){
         const i = document.createElement('input');
         i.className = 'm-input'; i.placeholder = hint; i.type = type; i.spellcheck = false;
         i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off');
-        lm.appendChild(i);
+        form.appendChild(i);
         return i;
       };
-      const lmU = lmIn('USER', 'text'), lmP = lmIn('PASSWORD', 'password');
+      const lmU = lmIn(lm, 'USER', 'text'), lmP = lmIn(lm, 'PASSWORD', 'password');
       lm.addEventListener('submit', function(ev){
         ev.preventDefault();
         if(!lmU.value || !lmP.value) return;
@@ -573,6 +575,25 @@
       const lmRow = rowsEl(el, 'm-grid');
       button(lmRow, 'SAVE', '', '', function(){ lm.requestSubmit ? lm.requestSubmit() : lm.dispatchEvent(new Event('submit', { cancelable: true })); });
       if(ui.lm) button(lmRow, 'CLR', '', '', function(){ delete ui.lm; MapGpkg.setToken(''); saveUi(); again(); });
+      textEl(el, 'm-head', 'COMPUTER' + (ui.sync ? ' - LINKED' : ''));
+      const sy = document.createElement('form');
+      sy.className = 'm-form m-login';
+      const syC = lmIn(sy, 'CODE FROM COMPUTER OPTN', 'text');
+      sy.addEventListener('submit', function(ev){
+        ev.preventDefault();
+        if(!syC.value.trim()) return;
+        try{ ui.sync = MapExport.parseCode(syC.value); }
+        catch(e){ MapDiag.raise('SYN-01', e.message); showPanel('diag'); return; }
+        delete ui.syncTag; delete ui.syncAt;
+        saveUi(); pull(true);
+      });
+      el.appendChild(sy);
+      const syRow = rowsEl(el, 'm-grid');
+      button(syRow, 'SAVE', '', '', function(){ sy.requestSubmit ? sy.requestSubmit() : sy.dispatchEvent(new Event('submit', { cancelable: true })); });
+      if(ui.sync){
+        button(syRow, 'SYNC', '', '', function(){ pull(true); });
+        button(syRow, 'CLR', '', '', function(){ delete ui.sync; delete ui.syncTag; delete ui.syncAt; MapDiag.clear('SYN-01'); saveUi(); again(); });
+      }
       textEl(el, 'm-head', 'BATTERY');
       textEl(el, 'm-value', batteryLeft());
       button(rowsEl(el, 'm-grid'), 'DIAG', '', MapDiag.active().length ? 'warn' : '', function(){ showPanel('diag'); }).style.marginTop = '14px';
@@ -594,21 +615,52 @@
     this.value = '';
     if(!f) return;
     if(f.size > MAX_FILE){ importFail('file too large (' + Math.round(f.size / 1e6) + ' MB)'); return; }
-    f.text().then(function(t){
-      let d;
-      try{ d = MapExport.parse(t); }catch(e){ importFail(e.message); return; }
-      if(!ls.set(KEY_DATA, t)){ importFail('storage full'); return; }
-      MapDiag.clear('IMP-01');
-      data = d;
-      delete ui.listId; delete ui.on;
-      unit = d.dist || unit; ang = d.ang || ang; fmt = d.fmt || fmt;
-      lists.select(null, true); sel.clear();
-      lists.load(); draw.load();
-      release();
-      if(d.view){ view.setCenter(d.view.lon, d.view.lat, d.view.zoom); view.setRotation(ori === 'nup' ? 0 : d.view.rot || 0); }
-      showPanel(null); saveUi();
-    }, function(e){ importFail(e.message); });
+    f.text().then(applyImport).catch(function(e){ importFail(e.message); });
   });
+  function applyImport(t){
+    const d = MapExport.parse(t);
+    if(!ls.set(KEY_DATA, t)) throw new Error('storage full');
+    MapDiag.clear('IMP-01');
+    data = d;
+    delete ui.listId; delete ui.on;
+    unit = d.dist || unit; ang = d.ang || ang; fmt = d.fmt || fmt;
+    lists.select(null, true); sel.clear();
+    lists.load(); draw.load();
+    release();
+    if(d.view){ view.setCenter(d.view.lon, d.view.lat, d.view.zoom); view.setRotation(ori === 'nup' ? 0 : d.view.rot || 0); }
+    showPanel(null); saveUi();
+  }
+
+  // ---- EXPT fran datorn: krypterad fil i en hemlig gist. Hamtas nar appen oppnas eller
+  // kommer tillbaka. Utan nat hander inget (bara SYNC-knappen visar det som fel).
+  // ponytail: GitHub tillater 60 anrop/h per IP utan inloggning, och det delas med andra pa
+  // samma mobiloperator-IP. 304 (ETag) raknas inte. Hamta via raw-adressen om SYN-01 blir vanligt.
+  let pulling = false;
+  async function pull(manual){
+    if(!ui.sync || pulling) return;
+    pulling = true;
+    try{
+      const h = { Accept: 'application/vnd.github+json' };
+      if(ui.syncTag) h['If-None-Match'] = ui.syncTag;
+      const r = await fetch('https://api.github.com/gists/' + ui.sync.gist, { headers: h, cache: 'no-store' });
+      if(r.status !== 304){
+        if(!r.ok) throw new Error(r.status === 404 ? 'not found, check the code' : 'GitHub answered ' + r.status);
+        const g = await r.json();
+        if(g.updated_at !== ui.syncAt){
+          const f = Object.values(g.files)[0];
+          applyImport(await MapExport.unseal(f.truncated ? await (await fetch(f.raw_url)).text() : f.content, ui.sync.key));
+          ui.syncAt = g.updated_at;
+        }
+        ui.syncTag = r.headers.get('ETag') || '';
+        saveUi();
+      }
+      MapDiag.clear('SYN-01');
+      if(manual) showPanel(null);
+    }catch(e){
+      if(manual || !(e instanceof TypeError)) MapDiag.raise('SYN-01', e.message);     // TypeError = inget nat
+      if(manual) showPanel('diag');
+    }finally{ pulling = false; }
+  }
 
   // Telefonens val sparas nar man gor nagot och nar appen lamnas (iOS stanger utan varning).
   function saveUi(){
@@ -617,7 +669,7 @@
     ls.set(KEY_UI, JSON.stringify(Object.assign(ui, { unit: unit, ang: ang, fmt: fmt, base: base, dim: dim, ov: ov, ori: ori, skCol: skCol, screen: screenMode,
       lon: view.lon, lat: view.lat, zoom: view.zoom, rot: view.rot })));
   }
-  document.addEventListener('visibilitychange', function(){ if(document.hidden) saveUi(); });
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) saveUi(); else pull(); });
   window.addEventListener('pagehide', saveUi);
 
   // ---- Start ----
@@ -631,6 +683,7 @@
   if(ui.on) draw.setActiveSet({ on: ui.on });
   refreshBar();
   applyScreen();                                       // knappmenyn finns nu - kartan far ratt hojd
+  pull();
   // Canvastext anvander fonten forst nar den ar laddad.
   if(document.fonts && document.fonts.load) document.fonts.load('18px ViperDisplay').then(function(){ fitKey = ''; renderHud(); ML.names.invalidate(); view.redraw(); });
   // Service worker bara pa en riktig https-adress - lokalt skulle den ge gamla filer under utveckling.

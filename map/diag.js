@@ -31,7 +31,7 @@
     ['CRD-02',  'GOTO: koordinaten gick inte att tolka'],
     ['LOS-01',  'LOS/HGHT: höjddata saknas för punkten (utanför täckning eller offline)'],
     ['LOS-02',  'LOS: träd- eller byggnadsdata kunde inte hämtas - sikten räknades utan dem'],
-    ['EXP-01',  'EXPT: exportfilen kunde inte sparas'],
+    ['EXP-01',  'EXPT: kunde inte skicka till telefonen'],
   ];
   const active = {};                      // kod -> { detail, t }
   const listeners = [];

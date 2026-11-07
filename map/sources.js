@@ -65,9 +65,9 @@ window.MAP_SOURCES = {
       { id: 'etopo', label: 'ESRI TOPO', short: 'ETOP', dimmer: true, attribution: 'Esri, HERE, Garmin, USGS, © OpenStreetMap', layers: [
         { url: esri('World_Topo_Map'), maxZoom: 19 } ] },
       { id: 'lm', label: 'LANTMÄTERIET', short: 'LM', dimmer: true, attribution: '© Lantmäteriet', layers: [
-        { gpkg: LM + 'topowebb-3857.gpkg', maxZoom: 19 } ] },
+        { gpkg: LM + 'topowebb-3857.gpkg', maxZoom: 17 } ] },
       { id: 'lmgr', label: 'LANTMÄTERIET GRÅ', short: 'LMGR', dimmer: true, attribution: '© Lantmäteriet', layers: [
-        { gpkg: LM + 'topowebb_nedtonad-3857.gpkg', maxZoom: 19 } ] },
+        { gpkg: LM + 'topowebb_nedtonad-3857.gpkg', maxZoom: 17 } ] },
     ] },
     { head: 'LASER', maps: [
       // Terrangskuggning ur laserdata (Sverige: Lantmateriets 1 m-markmodell via Mapterhorn).

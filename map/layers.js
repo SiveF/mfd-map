@@ -93,7 +93,7 @@
       }
       else img.src = url(z, x, y);
       cache.set(k, img);
-      // ponytail: minnescache med tak, ingen diskcache - varje start hamtar om.
+      // ponytail: minnescache med tak. Bara gpkg-rutor sparas pa disk (map/gpkg.js).
       if(cache.size > limits.rasterTiles) cache.delete(cache.keys().next().value);
       return img;
     }
@@ -121,8 +121,11 @@
           // Reserv: narmaste forfader som ar laddad, rattdelen forstorad.
           const wx = ((x % n) + n) % n;
           for(let d = 1; d <= 6 && z - d >= 0; d++){
-            const k = Math.pow(2, d), up = tile(z - d, Math.floor(wx / k), Math.floor(y / k));
-            if(up.complete && up.naturalWidth){
+            // Ur en fil kostar varje ruta anrop: hamta bara nivan tva steg upp (en sextondel
+            // sa manga rutor, snabb forhandsbild). Ovriga nivaer anvands om de redan finns.
+            const k = Math.pow(2, d), ux = Math.floor(wx / k), uy = Math.floor(y / k);
+            const up = src && d !== 2 ? cache.get((z - d) + '/' + ux + '/' + uy) : tile(z - d, ux, uy);
+            if(up && up.complete && up.naturalWidth){
               const sw = up.naturalWidth / k;
               ctx.drawImage(filtered(up, f), (wx % k) * sw, (y % k) * sw, sw, sw, dx, dy, dw, dw);
               break;

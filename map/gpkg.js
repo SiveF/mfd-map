@@ -13,6 +13,13 @@
      MapGpkg.token(user, pass)       -> inloggningen som text att spara
      MapGpkg.setToken(t) / MapGpkg.hasToken()
      MapGpkg.onToken(fn)             -> kors nar inloggningen byts (lagren borjar om)
+     MapGpkg.diskTiles               -> max antal rutor sparade pa enheten
+
+   SNABBHET: servern kor HTTP/1.1, sa webblasaren har sex anslutningar och varje
+   anrop tar 30-50 ms. En rutas data ligger intill sin tabellsida och grannrutor
+   nara varandra i filen, darfor hamtas sista steget som ett helt block
+   (CHUNK_PAGES) som delas av flera rutor. Hamtade rutor sparas pa enheten (Cache
+   API): omrade man sett laddas direkt. Byter Lantmateriet fil rensas de sparade.
 
    Fel inloggning (401/403) nollar inloggningen direkt, sa kontot inte lases
    av en rad misslyckade anrop. Fel har e.status.
@@ -22,7 +29,7 @@
    ===================================================================== */
 (function(root){
   const WORLD = 20037508.342789244;
-  const CACHE_BYTES = 16e6, TILES_AT_ONCE = 6;
+  const CACHE_BYTES = 8e6, CHUNK_BYTES = 24e6, CHUNK_PAGES = 32, TILES_AT_ONCE = 6, TRIM_EVERY = 256;
   const utf8 = new TextDecoder();
   let token = '';
   const hooks = [], shared = new Map();
@@ -62,11 +69,26 @@
     return out;
   }
 
-  function reader(read){
-    let ps = 0, usable = 0, cache = new Map(), opened = null, info = null;
-    const self = { maxZoom: null };
+  function reader(read, opts){
+    let ps = 0, usable = 0, cache = new Map(), chunks = new Map(), opened = null, info = null, depth = 0;
+    const self = { maxZoom: null, changed: '' };
+    const CHUNK = (opts && opts.chunk) || CHUNK_PAGES;
 
-    function page(n){
+    // wide = hamta hela blocket runt sidan (tabellens sista niva och overflow-sidor).
+    function page(n, wide){
+      const c = Math.floor((n - 1) / CHUNK);
+      let blk = chunks.get(c);
+      if(blk || wide){
+        if(blk) chunks.delete(c);
+        else {
+          blk = read(c * CHUNK * ps, CHUNK * ps).then(function(a){ return new Uint8Array(a); });
+          blk.catch(function(){ chunks.delete(c); });
+        }
+        chunks.set(c, blk);
+        if(chunks.size * CHUNK * ps > CHUNK_BYTES) chunks.delete(chunks.keys().next().value);
+        const at = (n - 1 - c * CHUNK) * ps;
+        return blk.then(function(b){ return b.subarray(at, at + ps); });
+      }
       let p = cache.get(n);
       if(p){ cache.delete(n); cache.set(n, p); return p; }
       p = read((n - 1) * ps, ps).then(function(a){ return new Uint8Array(a); });
@@ -82,7 +104,7 @@
       const M = Math.floor((usable - 12) * 32 / 255) - 23, K = M + (size - M) % (usable - 4);
       return K <= X ? K : M;
     }
-    // Hel post. Overflow-sidorna ligger nastan alltid i foljd: las alla i ett anrop.
+    // Hel post, med overflow-sidorna (ligger nastan alltid i samma block).
     async function payload(b, at, size){
       const loc = local(size, false);
       if(loc === size) return b.subarray(at, at + size);
@@ -90,18 +112,10 @@
       out.set(b.subarray(at, at + loc));
       let done = loc, pg = u32(b, at + loc);
       while(done < size && pg){
-        const n = Math.ceil((size - done) / per);
-        let buf;
-        try{ buf = new Uint8Array(await read((pg - 1) * ps, n * ps)); }
-        catch(e){ if(n === 1 || e.status === 401 || e.status === 403) throw e; buf = new Uint8Array(await read((pg - 1) * ps, ps)); }
-        for(let i = 0; (i + 1) * ps <= buf.length && done < size; i++){
-          const next = u32(buf, i * ps), take = Math.min(per, size - done);
-          out.set(buf.subarray(i * ps + 4, i * ps + 4 + take), done);
-          done += take;
-          const inOrder = next === pg + 1;
-          pg = next;
-          if(!inOrder) break;
-        }
+        const o = await page(pg, true), take = Math.min(per, size - done);
+        out.set(o.subarray(4, 4 + take), done);
+        done += take;
+        pg = u32(o, 0);
       }
       if(done < size) throw new Error('gpkg: kort post');
       return out;
@@ -132,6 +146,7 @@
       const rootOf = function(name){ const m = master.find(function(r){ return r[0] === 'table' && r[1] === name; }); if(!m) throw new Error('gpkg: saknar ' + name); return m; };
       const content = (await tableRows(rootOf('gpkg_contents')[3])).find(function(r){ return r[1] === 'tiles'; });
       if(!content) throw new Error('gpkg: inga kartrutor');
+      self.changed = String(content[4]);                   // last_change: ny fil = nya rutor
       const name = content[0], tbl = rootOf(name);
       // Kommentarerna bort forst: Lantmateriets CREATE TABLE ar full av dem (med kommatecken).
       const sql = tbl[4].replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -178,8 +193,8 @@
     }
     // Radens tile_data ur tabellen.
     async function rowData(id){
-      for(let n = info.tbl;;){
-        const b = await page(n), h = n === 1 ? 100 : 0, cnt = u16(b, h + 3);
+      for(let n = info.tbl, lvl = 1;; lvl++){
+        const b = await page(n, lvl === depth), h = n === 1 ? 100 : 0, cnt = u16(b, h + 3);
         let lo = 0, hi = cnt;
         if(b[h] === 5){
           while(lo < hi){
@@ -189,6 +204,7 @@
           n = lo < cnt ? u32(b, u16(b, h + 12 + 2 * lo)) : u32(b, h + 8);
           continue;
         }
+        depth = lvl;                                       // lika djupt overallt i tradet
         while(lo < hi){
           const mid = (lo + hi) >> 1;
           let at = u16(b, h + 8 + 2 * mid);
@@ -212,7 +228,8 @@
       const d = await rowData(id);
       return d ? new Blob([d]) : null;
     };
-    self.reset = function(){ cache = new Map(); opened = null; };
+    self.open = open;
+    self.reset = function(){ cache = new Map(); chunks = new Map(); opened = null; };
     return self;
   }
 
@@ -253,15 +270,54 @@
     };
   }
 
+  // Rutor sparade pa enheten. Allt har far misslyckas: da hamtas rutan fran natet.
+  // ponytail: rensningen ar FIFO, inte senast anvand. Rakna om nar sparade omraden forsvinner.
+  function onDisk(url, rd, fetchTile){
+    const name = url.split('/').pop(), prefix = '/lm-tiles/' + name + '/', meta = '/lm-meta/' + name;
+    const store = root.caches ? root.caches.open('mfd-lm-tiles').catch(function(){ return null; }) : Promise.resolve(null);
+    let puts = 0, checked = false;
+    function keep(c, n){                                   // bara de n senast sparade rutorna blir kvar
+      c.keys().then(function(keys){
+        const mine = keys.filter(function(k){ return k.url.indexOf(prefix) >= 0; });
+        mine.slice(0, Math.max(0, mine.length - n)).forEach(function(k){ c.delete(k); });
+      }).catch(function(){});
+    }
+    function checkVersion(c){
+      checked = true;
+      c.match(meta).then(function(r){ return r ? r.text() : null; }).then(function(old){
+        if(old === rd.changed) return;
+        if(old != null) keep(c, 0);
+        return c.put(meta, new Response(rd.changed));
+      }).catch(function(){});
+    }
+    return function(z, x, y){
+      const key = prefix + z + '/' + x + '/' + y;
+      return store.then(function(c){
+        return (c ? c.match(key).catch(function(){ return null; }) : Promise.resolve(null)).then(function(hit){
+          if(hit) return hit.blob();
+          return fetchTile(z, x, y).then(function(b){
+            if(c && !checked && rd.changed) checkVersion(c);
+            if(c && b){
+              c.put(key, new Response(b)).catch(function(){});
+              if(++puts % TRIM_EVERY === 0) keep(c, MapGpkg.diskTiles);
+            }
+            return b;
+          });
+        });
+      });
+    };
+  }
+
   function MapGpkg(url){
     if(shared.has(url)) return shared.get(url);
     const rd = reader(httpRead(url));
     rd.allowed = function(){ return !!token; };
-    const G = { tile: queued(rd), ready: rd.allowed, get maxZoom(){ return rd.maxZoom; } };
+    const G = { tile: onDisk(url, rd, queued(rd)), ready: rd.allowed, get maxZoom(){ return rd.maxZoom; } };
     hooks.push(rd.reset);
     shared.set(url, G);
     return G;
   }
+  MapGpkg.diskTiles = 20000;                               // ~500 MB, telefonen satter lagre
   MapGpkg.reader = reader;                                 // check.js: egen lasfunktion i stallet for http
   MapGpkg.token = function(user, pass){
     return btoa(Array.from(new TextEncoder().encode(user + ':' + pass), function(c){ return String.fromCharCode(c); }).join(''));
