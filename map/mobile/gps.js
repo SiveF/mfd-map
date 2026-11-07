@@ -2,7 +2,7 @@
    map/mobile/gps.js  -  MIN POSITION. Geolocation + kompass + lager (prick,
    noggrannhetscirkel, riktningskil). GPS kraver https (eller localhost).
 
-     const g = MapGps(view, { color, outline, onFix(), onError(text) })
+     const g = MapGps(view, { color, outline, onFix(), onError(text), compassTurn() -> grader })
      g.setOn(pa)                 -> maste anropas fran ett knapptryck (iOS fragar om lov)
      g.on() / g.pos()            -> { lat, lon, acc (m), t (ms), heading (grader, null om okand) } | null
      g.setFollow(b)              -> kartan centreras pa positionen och vrids sa att riktningen ar uppat
@@ -67,7 +67,7 @@
       // iOS: webkitCompassHeading (0 = norr, medurs). Ovriga: deviceorientationabsolute.
       const h = ev.webkitCompassHeading != null ? ev.webkitCompassHeading : ev.absolute && ev.alpha != null ? 360 - ev.alpha : null;
       if(h == null) return;
-      compass = h;
+      compass = h + (o.compassTurn ? o.compassTurn() : 0);   // innehallets overkant, inte telefonens
       if(pos && !pos.moving){ pos.heading = h; aim(); view.redraw(); }
     }
     function listenCompass(){

@@ -65,13 +65,31 @@
   // ---- Kartan (ritordning = ordningen har, samma som pa datorn) ----
   const view = MapView($('m-map'), { bg: P.bg, lat: start.lat, lon: start.lon, zoom: start.zoom, minZoom: 2, maxZoom: 19,
                                      dpr: Math.min(2, window.devicePixelRatio || 1) });
-  view.resize();
   view.setRotation(ori === 'nup' ? 0 : start.rot || 0);
-  window.addEventListener('resize', view.resize);
+
+  // Skarmlage (OPTN). iOS kan inte lasa det fran en webbapp (screen.orientation.lock saknas),
+  // sa appen vrider sig sjalv 90 grader nar telefonens lage inte ar det valda.
+  let screenMode = ui.screen || 'auto', turn = 0;
+  function applyScreen(){
+    const w = window.innerWidth, h = window.innerHeight, port = h >= w, app = $('m-app');
+    turn = screenMode === 'auto' || (screenMode === 'port') === port ? 0 : port ? 90 : 270;
+    app.classList.toggle('rot90', turn === 90);
+    app.classList.toggle('rot270', turn === 270);
+    app.classList.toggle('land', turn ? port : !port);
+    app.style.cssText = !turn ? '' : 'inset:auto;left:0;top:0;width:' + h + 'px;height:' + w + 'px;transform-origin:0 0;transform:' +
+      (turn === 90 ? 'translate(' + w + 'px,0) rotate(90deg)' : 'translate(0,' + h + 'px) rotate(-90deg)');
+    view.resize();
+  }
+  applyScreen();
+  window.addEventListener('resize', applyScreen);
 
   // Baskartorna utan VECT - den kraver Natural Earth-datan (6-9 MB).
-  const bases = S.bases.map(function(g){ return { head: g.head, maps: g.maps.filter(function(m){ return !m.vector; }) }; })
-                       .filter(function(g){ return g.maps.length; });
+  // Esri Topo saknar hojdkurvor i Sverige: hette ETOP, blir TOPO med egna kurvor (topoC nedan).
+  // Till skillnad fran OTM ritar den inte ovningsfalt i rott.
+  const DEM_CREDIT = '© Mapterhorn, Lantmäteriet (laserdata)';
+  const bases = S.bases.map(function(g){ return { head: g.head, maps: g.maps.filter(function(m){ return !m.vector; }).map(function(m){
+    return m.id === 'etopo' ? Object.assign({}, m, { short: 'TOPO', attribution: m.attribution + ', ' + DEM_CREDIT }) : m;
+  }) }; }).filter(function(g){ return g.maps.length; });
   const MAPS = {}, baseLayers = {};
   bases.forEach(function(g){ g.maps.forEach(function(m){
     MAPS[m.id] = m;
@@ -81,7 +99,12 @@
       : m.layers.map(function(src, i){ return view.addLayer(MapLayers.tile(Object.assign({ id: m.id + i, visible: false, attribution: m.attribution }, src))); });
   }); });
   if(!MAPS[base]) base = 'strt';
+  // Svarta kurvor: datorns TOPO LINES ar vita och syns inte pa en ljus karta.
+  const blk = function(a){ return 'rgba(' + rgbOf(P.bg).join(',') + ',' + a + ')'; };
+  const topoC = view.addLayer(MapLayers.dem(Object.assign({ id: 'topoC', mode: 'contour', visible: false, step: function(){ return null; },
+    line: blk(.35), index: blk(.7), label: blk(.9), outline: P.white }, S.dem)));
   function applyBase(){
+    topoC.visible = base === 'etopo';
     const d = MAPS[base].dem ? 1 : 0.06 + (dim - 1) / 9 * 0.94;   // alla rasterkartor
     Object.keys(baseLayers).forEach(function(id){ baseLayers[id].forEach(function(l){ l.visible = id === base; l.dim = d; }); });
     view.redraw();
@@ -182,7 +205,8 @@
 
   const gps = MapGps(view, { color: P.green, outline: P.bg,
     onFix: function(){ MapDiag.clear('GPS-01'); renderHud(); refreshBar(); },
-    onError: function(t){ MapDiag.raise('GPS-01', t); refreshBar(); } });
+    onError: function(t){ MapDiag.raise('GPS-01', t); refreshBar(); },
+    compassTurn: function(){ return (window.orientation != null ? window.orientation : screen.orientation ? screen.orientation.angle : 0) + turn; } });
 
   // NUP: norr upp, gar inte att vrida. GPS: foljer positionen och riktningen (om GPS ar pa), tva
   // fingrar zoomar bara. FREE: allt gar. Flyttar man kartan i GPS-laget hamnar man i FREE.
@@ -214,6 +238,7 @@
     grab: function(p){ return draw.sketching() || ruler.active() ? view.grabAt(p) : null; },
     moved: release,
     lock: function(){ return { noRot: ori !== 'free', noPan: ori === 'gps' }; },
+    local: function(x, y){ return MapTouch.unturn(turn, window.innerWidth, window.innerHeight, x, y); },
   });
 
   // ---- Overst, kompass, skala, laddning ----
@@ -330,11 +355,16 @@
     if(d.hold){
       let t = null;
       const stop = function(){ clearTimeout(t); $('m-erase').hidden = true; };
-      d.el.addEventListener('pointerdown', function(){
+      // preventDefault: annars tar iOS over ett langt tryck och fingret avbryts.
+      const go = function(ev){
+        ev.preventDefault();
+        clearTimeout(t);
         $('m-erase').hidden = false;
         t = setTimeout(function(){ d.hold(); stop(); }, HOLD_MS);
-      });
-      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(e){ d.el.addEventListener(e, stop); });
+      };
+      d.el.addEventListener('touchstart', go, { passive: false });
+      d.el.addEventListener('mousedown', go);
+      ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(function(e){ d.el.addEventListener(e, stop); });
     }
     $(d.side ? 'm-side' : 'm-bar').appendChild(d.el);
   });
@@ -342,7 +372,7 @@
     SLOTS.forEach(function(d){
       const label = typeof d.label === 'function' ? d.label() : d.label || '';
       const open = !!d.panel && (panel === d.panel || panel === d.also);
-      d.el.firstChild.textContent = label;
+      if(d.el.firstChild.textContent !== label) d.el.firstChild.textContent = label;
       d.el.style.visibility = label ? '' : 'hidden';
       d.el.style.color = d.color ? d.color() : '';
       d.el.lastChild.textContent = d.note ? d.note() : '';
@@ -488,6 +518,11 @@
       [['deg', 'DEG'], ['mil', 'MIL']].forEach(function(x){
         button(a, x[1], '', choice(x[0] === ang), function(){ ang = x[0]; again(); view.redraw(); });
       });
+      textEl(el, 'm-head', 'SCREEN');
+      const sc = rowsEl(el, 'm-grid');
+      [['auto', 'AUTO'], ['port', 'PORT'], ['land', 'LAND']].forEach(function(x){
+        button(sc, x[1], '', choice(x[0] === screenMode), function(){ screenMode = x[0]; applyScreen(); again(); });
+      });
       textEl(el, 'm-head', 'BATTERY');
       textEl(el, 'm-value', batteryLeft());
       button(rowsEl(el, 'm-grid'), 'DIAG', '', MapDiag.active().length ? 'warn' : '', function(){ showPanel('diag'); }).style.marginTop = '14px';
@@ -529,7 +564,7 @@
   function saveUi(){
     const ov = {};
     Object.keys(OVERLAYS).forEach(function(k){ ov[k] = OVERLAYS[k].l.visible; });
-    ls.set(KEY_UI, JSON.stringify(Object.assign(ui, { unit: unit, ang: ang, fmt: fmt, base: base, dim: dim, ov: ov, ori: ori, skCol: skCol,
+    ls.set(KEY_UI, JSON.stringify(Object.assign(ui, { unit: unit, ang: ang, fmt: fmt, base: base, dim: dim, ov: ov, ori: ori, skCol: skCol, screen: screenMode,
       lon: view.lon, lat: view.lat, zoom: view.zoom, rot: view.rot })));
   }
   document.addEventListener('visibilitychange', function(){ if(document.hidden) saveUi(); });
@@ -545,7 +580,7 @@
   }
   if(ui.on) draw.setActiveSet({ on: ui.on });
   refreshBar();
-  view.resize();                                       // knappmenyn finns nu - kartan far ratt hojd
+  applyScreen();                                       // knappmenyn finns nu - kartan far ratt hojd
   // Canvastext anvander fonten forst nar den ar laddad.
   if(document.fonts && document.fonts.load) document.fonts.load('18px ViperDisplay').then(function(){ fitKey = ''; renderHud(); ML.names.invalidate(); view.redraw(); });
   // Service worker bara pa en riktig https-adress - lokalt skulle den ge gamla filer under utveckling.

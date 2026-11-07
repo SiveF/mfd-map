@@ -3,7 +3,8 @@
    tva fingrar = nypa (zoom) + vrida + flytta, kort tryck = onTap.
    MapView rors inte - datorns musstyrning ligger kvar dar.
 
-     MapTouch(view, { tap(p), moved(), grab(p), lock() })   moved = ett finger flyttade kartan
+     MapTouch(view, { tap(p), moved(), grab(p), lock(), local(x, y) })   moved = ett finger flyttade kartan
+     local(x, y) -> { x, y }: fingrets skarmpunkt i kartans koordinater (vriden app, MapTouch.unturn)
      lock() -> { noRot, noPan }: tva fingrar far inte vrida / flytta (da zoomar de kring mitten)
      grab(p) -> { move(p), up() } | null: verktyg (skissen) tar ett fingers drag. Fragas forst
      nar fingret flyttat sig, sa en nypning som borjar med ett finger inte ritar nagot.
@@ -35,7 +36,10 @@
 
   function MapTouch(v, o){
     const c = v.canvas;
-    const xy = function(t){ const r = c.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+    const xy = function(t){
+      if(o.local) return o.local(t.clientX, t.clientY);
+      const r = c.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top };
+    };
     let one = null, two = null, tap = null, stroke = null;   // ett finger: senaste punkt; tap: { x, y, t } tills det inte ar ett tryck
     const endStroke = function(){ if(stroke){ stroke.up(); stroke = null; v.redraw(); } };
 
@@ -80,6 +84,11 @@
     document.addEventListener('gesturestart', function(ev){ ev.preventDefault(); });
   }
 
+  // Skarmpunkt -> innehall vridet turn grader medurs med ovre vanstra hornet i skarmens origo-sida.
+  // 90: (x, y) ritas pa (w - y, x). 270: (x, y) ritas pa (y, h - x).
+  MapTouch.unturn = function(turn, w, h, x, y){
+    return turn === 90 ? { x: y, y: w - x } : turn === 270 ? { x: h - y, y: x } : { x: x, y: y };
+  };
   MapTouch.pair = pair;
   MapTouch.pairState = pairState;
   root.MapTouch = MapTouch;

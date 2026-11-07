@@ -2,22 +2,27 @@
    och utmed vanster kant + helskarmspaneler. Knapparna foljer OSB-reglerna i ui/layout.css:
    ingen ram i vila, TOGGLE PA = vit fyllning runt BARA texten (.on), VALT ALTERNATIV = vit ram
    (.current), max 4 tecken per rad. Farger BARA ur paletten, inga radier. ui/layout.css rors inte. */
-html, body{ position:fixed; inset:0; overscroll-behavior:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+html, body{ position:fixed; inset:0; overscroll-behavior:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+             -webkit-user-select:none; }   /* iOS laser bara prefixet: annars markerar ett langt tryck text och avbryter fingret */
 body{ display:block; }
 /* Utan detta gar det inte att skriva i falt pa iOS (style.css: user-select none). */
 input{ -webkit-user-select:text; user-select:text; }
 
-#m-app{ position:absolute; inset:0; display:flex; flex-direction:column; }
+#m-app{ position:absolute; inset:0; display:flex; flex-direction:column;
+        --sa-t:env(safe-area-inset-top); --sa-r:env(safe-area-inset-right); --sa-b:env(safe-area-inset-bottom); --sa-l:env(safe-area-inset-left); }
+/* Vriden av app.js (OPTN SCREEN): telefonens kanter hamnar pa andra sidor av innehallet */
+#m-app.rot90{ --sa-t:env(safe-area-inset-right); --sa-r:env(safe-area-inset-bottom); --sa-b:env(safe-area-inset-left); --sa-l:env(safe-area-inset-top); }
+#m-app.rot270{ --sa-t:env(safe-area-inset-left); --sa-r:env(safe-area-inset-top); --sa-b:env(safe-area-inset-right); --sa-l:env(safe-area-inset-bottom); }
 #m-stage{ position:relative; flex:1; min-height:0; overflow:hidden; --m-center-h:32px; }
 #m-map{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
 
 /* Laddningsbar overst, syns bara nar nagot laddar */
-#m-load{ position:absolute; z-index:2; left:0; right:0; top:env(safe-area-inset-top); height:3px; pointer-events:none; }
+#m-load{ position:absolute; z-index:2; left:0; right:0; top:var(--sa-t); height:3px; pointer-events:none; }
 #m-load[hidden]{ display:none; }
 #m-load-bar{ height:100%; background:var(--green); }
 
 /* Harkorsets koordinat (fontstorleken raknas i app.js). Under den min position och vald punkt. */
-#m-hud{ position:absolute; z-index:2; left:8px; right:8px; top:calc(8px + env(safe-area-inset-top)); pointer-events:none;
+#m-hud{ position:absolute; z-index:2; left:calc(8px + var(--sa-l)); right:calc(8px + var(--sa-r)); top:calc(8px + var(--sa-t)); pointer-events:none;
         line-height:1.15; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
 #m-center{ white-space:nowrap; overflow:hidden; }
 #m-pos, #m-sel{ font-size:17px; letter-spacing:1px; }
@@ -25,11 +30,11 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-sel{ color:var(--c-blue); white-space:pre-line; overflow-wrap:anywhere; }
 
 /* Kompassen syns bara nar kartan ar vriden, under koordinaterna. */
-#map-compass{ right:8px; top:calc(54px + var(--m-center-h) + env(safe-area-inset-top)); }
+#map-compass{ right:calc(8px + var(--sa-r)); top:calc(54px + var(--m-center-h) + var(--sa-t)); }
 #map-compass-up{ font-size:15px; }
 
 #m-lower{ position:absolute; z-index:2; left:0; right:0; bottom:0; display:flex; flex-direction:column; pointer-events:none; }
-#m-foot{ padding:0 8px 4px; }
+#m-foot{ padding:0 8px 4px calc(8px + var(--sa-l)); }
 #map-scale-txt{ font-size:16px; }
 
 #m-erase{ position:absolute; z-index:4; left:0; right:0; top:40%; text-align:center; font-size:72px; letter-spacing:2px; pointer-events:none;
@@ -39,7 +44,7 @@ input{ -webkit-user-select:text; user-select:text; }
 /* Slots: liten text, men traffytan (::after) ar lika stor som en vanlig knapp och nar ut over kartan.
    Marginalen ar aldrig lagre an iPhones hemindikator. */
 #m-bar{ position:relative; z-index:6; display:grid; grid-template-columns:repeat(6, 1fr); background:var(--bg);
-        height:max(24px, calc(6px + env(safe-area-inset-bottom))); }
+        height:max(24px, calc(6px + var(--sa-b))); padding:0 var(--sa-r) 0 var(--sa-l); }
 .m-slot{ appearance:none; -webkit-appearance:none; position:relative; font:inherit; font-size:13px; letter-spacing:1px; line-height:1;
          color:var(--green); background:none; border:0; padding:4px 0 0; min-width:0; touch-action:manipulation;
          display:flex; justify-content:center; align-items:flex-start; }
@@ -53,12 +58,18 @@ input{ -webkit-user-select:text; user-select:text; }
                padding-bottom:3px; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
 .m-slot small:empty{ display:none; }
 /* Vanster kant: slot 1 overst, en bokstav per rad. Tomma slots tar inga tryck. */
-#m-side{ position:absolute; z-index:3; left:0; top:calc(70px + var(--m-center-h) + env(safe-area-inset-top)); bottom:36px; width:44px;
+#m-side{ position:absolute; z-index:3; left:var(--sa-l); top:calc(70px + var(--m-center-h) + var(--sa-t)); bottom:36px; width:44px;
          display:flex; flex-direction:column; pointer-events:none; }
 #m-side .m-slot{ flex:1; min-height:0; pointer-events:auto; align-items:center; justify-content:flex-start; padding:0 0 0 2px; touch-action:none; }
 #m-side .m-slot::after{ inset:0; }
-#m-side span{ writing-mode:vertical-rl; text-orientation:upright; letter-spacing:0; padding:3px 1px; background:var(--bg); }
-#m-side .m-slot.on span{ background:var(--c-white); }
+#m-side span{ writing-mode:vertical-rl; text-orientation:upright; letter-spacing:0; padding:3px 1px;
+             -webkit-text-stroke:2.5px var(--bg); paint-order:stroke fill; }
+#m-side .m-slot.on span{ background:var(--c-white); -webkit-text-stroke:0; }
+/* Liggande: vanster kolumn i full hojd, koordinater och skala bredvid den */
+#m-app.land #m-side{ top:calc(4px + var(--sa-t)); bottom:4px; }
+#m-app.land #m-side .m-slot{ font-size:11px; }
+#m-app.land #m-hud{ left:calc(46px + var(--sa-l)); }
+#m-app.land #m-foot{ padding-left:calc(46px + var(--sa-l)); }
 
 /* Knappar i panelerna */
 .m-btn{ appearance:none; -webkit-appearance:none; font:inherit; color:var(--green); background:none; border:1px solid transparent;
@@ -72,7 +83,7 @@ input{ -webkit-user-select:text; user-select:text; }
 
 /* Helskarmspaneler (over kartan, knappmenyn ligger kvar) */
 #m-panel{ position:absolute; z-index:5; inset:0; background:var(--bg); overflow-y:auto; -webkit-overflow-scrolling:touch;
-          padding:calc(10px + env(safe-area-inset-top)) 10px 40px; }
+          padding:calc(10px + var(--sa-t)) calc(10px + var(--sa-r)) 40px calc(10px + var(--sa-l)); }
 #m-panel[hidden]{ display:none; }
 .m-head{ font-size:14px; letter-spacing:2px; color:var(--green-dim); margin:14px 0 4px; }
 .m-credit{ font-size:12px; color:var(--green-dim); margin-top:24px; overflow-wrap:anywhere; }
