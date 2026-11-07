@@ -3,9 +3,8 @@
    noggrannhetscirkel, riktningskil). GPS kraver https (eller localhost).
 
      const g = MapGps(view, { color, outline, onFix(), onError(text) })
-     g.setMode('hi'|'lo'|'off')  -> maste anropas fran ett knapptryck (iOS fragar om lov)
-                                    HI = GPS + kompass, LO = grov position utan kompass (sparar batteri)
-     g.mode() / g.on() / g.pos() -> { lat, lon, acc (m), t (ms), heading (grader, null om okand) } | null
+     g.setOn(pa)                 -> maste anropas fran ett knapptryck (iOS fragar om lov). Pa = foljlage
+     g.on() / g.pos()            -> { lat, lon, acc (m), t (ms), heading (grader, null om okand) } | null
      g.follow() / g.setFollow(b) -> foljlage: kartan centreras pa positionen
 
    Riktning: GPS-kursen nar man ror sig (annars ar den brus), annars telefonens
@@ -14,11 +13,10 @@
 (function(root){
   const MOVING = 1;                                    // m/s: over detta ar GPS-kursen palitlig
   const RES0 = 156543.03392804097;                     // m per px vid zoom 0
-  const OPT = { hi: { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
-                lo: { enableHighAccuracy: false, maximumAge: 60000, timeout: 60000 } };
+  const OPT = { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 };
 
   function MapGps(view, o){
-    let watch = null, mode = 'off', pos = null, follow = false, compass = null, listening = false;
+    let watch = null, pos = null, follow = false, compass = null, listening = false;
 
     view.addLayer({ id: 'gps', visible: true, status: '', draw: function(ctx, v){
       if(watch == null || !pos) return;
@@ -77,30 +75,26 @@
     }
 
     return {
-      setMode: function(m){
-        if(m === mode) return;
-        if(m !== 'off' && (!navigator.geolocation || !window.isSecureContext)){
-          if(o.onError) o.onError('GPS kräver https (sidan körs över ' + location.protocol + ')');
+      setOn: function(b){
+        if(b === (watch != null)) return;
+        if(!b){
+          navigator.geolocation.clearWatch(watch);
+          watch = null; pos = null; follow = false;
+          quietCompass();
+          view.redraw();
           return;
         }
-        if(watch != null) navigator.geolocation.clearWatch(watch);
-        watch = null;
-        if(m === 'off'){ pos = null; follow = false; }
-        else{
-          if(mode === 'off') follow = true;
-          watch = navigator.geolocation.watchPosition(fix, function(e){ if(o.onError) o.onError(e.message || ('fel ' + e.code)); }, OPT[m]);
+        if(!navigator.geolocation || !window.isSecureContext){
+          if(o.onError) o.onError('GPS requires https (page is served over ' + location.protocol + ')');
+          return;
         }
-        mode = m;
-        if(m !== 'hi') quietCompass();
-        else{
-          // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = ingen kil nar man star still.
-          const DO = window.DeviceOrientationEvent;
-          if(DO && DO.requestPermission) DO.requestPermission().then(function(s){ if(s === 'granted') listenCompass(); }, function(){});
-          else if(DO) listenCompass();
-        }
-        view.redraw();
+        follow = true;
+        watch = navigator.geolocation.watchPosition(fix, function(e){ if(o.onError) o.onError(e.message || ('error ' + e.code)); }, OPT);
+        // iOS vill ha lov for kompassen, i samma knapptryck. Nekat = ingen kil nar man star still.
+        const DO = window.DeviceOrientationEvent;
+        if(DO && DO.requestPermission) DO.requestPermission().then(function(s){ if(s === 'granted') listenCompass(); }, function(){});
+        else if(DO) listenCompass();
       },
-      mode: function(){ return mode; },
       on: function(){ return watch != null; },
       pos: function(){ return pos; },
       follow: function(){ return follow; },

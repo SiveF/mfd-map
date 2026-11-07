@@ -25,33 +25,33 @@
   const num = function(v){ return typeof v === 'number' && isFinite(v); };
   const str = function(v){ return typeof v === 'string'; };
   function need(ok, what){ if(!ok) throw new Error(what); }
-  function coord(p, what){ need(p && num(p.lat) && num(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 360, what + ': koordinat'); }
+  function coord(p, what){ need(p && num(p.lat) && num(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 360, what + ': coordinate'); }
 
   function parse(text){
     let d;
-    try{ d = JSON.parse(text); }catch(e){ throw new Error('inte JSON'); }
-    need(d && d.format === FORMAT, 'inte en MFD MAP-exportfil');
-    need(d.version === VERSION, 'okand version ' + d.version);
-    need(d.lists && Array.isArray(d.lists.lists), 'listor saknas');
-    need(d.drawings && Array.isArray(d.drawings.oleats), 'oleater saknas');
+    try{ d = JSON.parse(text); }catch(e){ throw new Error('not JSON'); }
+    need(d && d.format === FORMAT, 'not an MFD MAP export file');
+    need(d.version === VERSION, 'unknown version ' + d.version);
+    need(d.lists && Array.isArray(d.lists.lists), 'lists missing');
+    need(d.drawings && Array.isArray(d.drawings.oleats), 'oleats missing');
     d.lists.lists.forEach(function(l){
-      need(l && str(l.id) && str(l.name) && Array.isArray(l.points), 'trasig lista');
+      need(l && str(l.id) && str(l.name) && Array.isArray(l.points), 'broken list');
       l.points.forEach(function(p){
-        need(p && str(p.id) && str(p.name), 'trasig punkt i ' + l.name);
+        need(p && str(p.id) && str(p.name), 'broken point in ' + l.name);
         coord(p, l.name + '/' + p.name);
-        if(p.leg){ need(Array.isArray(p.leg.nodes), 'trasig rutt i ' + l.name); p.leg.nodes.forEach(function(q){ coord(q, l.name + '/' + p.name); }); }
+        if(p.leg){ need(Array.isArray(p.leg.nodes), 'broken route in ' + l.name); p.leg.nodes.forEach(function(q){ coord(q, l.name + '/' + p.name); }); }
       });
     });
     d.drawings.oleats.forEach(function(ol){
-      need(ol && str(ol.id) && str(ol.name) && Array.isArray(ol.shapes), 'trasig oleat');
+      need(ol && str(ol.id) && str(ol.name) && Array.isArray(ol.shapes), 'broken oleat');
       ol.shapes.forEach(function(sh){
-        need(sh && SHAPES.indexOf(sh.type) >= 0 && Array.isArray(sh.pts) && sh.pts.length > 0, 'trasig figur i ' + ol.name);
+        need(sh && SHAPES.indexOf(sh.type) >= 0 && Array.isArray(sh.pts) && sh.pts.length > 0, 'broken shape in ' + ol.name);
         sh.pts.forEach(function(q){ coord(q, ol.name); });
-        if(sh.type === 'crcl') need(num(sh.r), 'trasig cirkel i ' + ol.name);
-        if(sh.type === 'text') need(str(sh.text), 'trasig text i ' + ol.name);
+        if(sh.type === 'crcl') need(num(sh.r), 'broken circle in ' + ol.name);
+        if(sh.type === 'text') need(str(sh.text), 'broken text in ' + ol.name);
       });
     });
-    if(d.view) need(num(d.view.lon) && num(d.view.lat) && num(d.view.zoom), 'trasig vy');
+    if(d.view) need(num(d.view.lon) && num(d.view.lat) && num(d.view.zoom), 'broken view');
     return d;
   }
 

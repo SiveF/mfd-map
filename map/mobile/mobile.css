@@ -1,14 +1,14 @@
-/* map/mobile/mobile.css - telefonlayouten. Staende, kartan over hela sidan, slots i
-   bottenmarginalen och utmed vanster kant + helskarmspaneler,
-   INTE OSB-ramen. Farger BARA ur paletten i ui/layout.css, inga radier (*-regeln
-   i ui/style.css). ON = vit fyllning med svart text. ui/layout.css rors inte. */
+/* map/mobile/mobile.css - telefonlayouten. Kartan over hela sidan, slots i bottenmarginalen
+   och utmed vanster kant + helskarmspaneler. Knapparna foljer OSB-reglerna i ui/layout.css:
+   ingen ram i vila, TOGGLE PA = vit fyllning runt BARA texten (.on), VALT ALTERNATIV = vit ram
+   (.current), max 4 tecken per rad. Farger BARA ur paletten, inga radier. ui/layout.css rors inte. */
 html, body{ position:fixed; inset:0; overscroll-behavior:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
 body{ display:block; }
 /* Utan detta gar det inte att skriva i falt pa iOS (style.css: user-select none). */
 input{ -webkit-user-select:text; user-select:text; }
 
 #m-app{ position:absolute; inset:0; display:flex; flex-direction:column; }
-#m-stage{ position:relative; flex:1; min-height:0; overflow:hidden; }
+#m-stage{ position:relative; flex:1; min-height:0; overflow:hidden; --m-center-h:32px; }
 #m-map{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
 
 /* Laddningsbar overst, syns bara nar nagot laddar */
@@ -16,78 +16,80 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-load[hidden]{ display:none; }
 #m-load-bar{ height:100%; background:var(--green); }
 
-/* Koordinater: kartans mitt + min position */
-#m-hud{ position:absolute; z-index:2; left:8px; top:calc(8px + env(safe-area-inset-top)); right:88px; pointer-events:none;
-        font-size:17px; letter-spacing:1px; line-height:1.3;
-        -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
-#m-pos{ color:var(--c-blue); }
+/* Harkorsets koordinat: fyller overkanten (fontstorleken raknas i app.js). Under den min position. */
+#m-hud{ position:absolute; z-index:2; left:8px; right:8px; top:calc(8px + env(safe-area-inset-top)); pointer-events:none;
+        line-height:1.15; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
+#m-center{ white-space:nowrap; overflow:hidden; }
+#m-pos{ color:var(--c-green); font-size:17px; letter-spacing:1px; }
 
-#map-compass{ right:8px; top:calc(8px + env(safe-area-inset-top)); }
+/* Kompassen syns bara nar kartan ar vriden, under koordinaten. */
+#map-compass{ right:8px; top:calc(10px + var(--m-center-h) + env(safe-area-inset-top)); }
 #map-compass-up{ font-size:15px; }
 
 #m-lower{ position:absolute; z-index:2; left:0; right:0; bottom:0; display:flex; flex-direction:column; pointer-events:none; }
 #m-foot{ padding:0 8px 4px; }
 #map-scale-txt{ font-size:16px; }
-#map-src{ font-size:10px; margin-top:2px; }
 
-/* Vald punkt */
-#m-point{ pointer-events:auto; background:var(--bg); border-top:2px solid var(--green); padding:8px 10px;
+/* Vald punkt (nederkanten lamnar plats for GPS-avlasningen) */
+#m-point{ pointer-events:auto; background:var(--bg); border-top:2px solid var(--green); padding:8px 10px 22px;
           display:grid; grid-template-columns:1fr auto; gap:2px 8px; font-size:17px; letter-spacing:1px; }
 #m-point[hidden]{ display:none; }
 .mp-name{ font-size:20px; color:var(--c-blue); overflow-wrap:anywhere; }
-.mp-sub{ grid-column:1; font-size:13px; color:var(--green-dim); }
 .mp-line{ grid-column:1 / -1; overflow-wrap:anywhere; }
+.mp-gps{ color:var(--c-green); }
 
 /* Slots: liten text, men traffytan (::after) ar lika stor som en vanlig knapp och nar ut over kartan.
    Marginalen ar aldrig lagre an iPhones hemindikator. */
 #m-bar{ position:relative; z-index:6; display:grid; grid-template-columns:repeat(6, 1fr); background:var(--bg);
         height:max(24px, calc(6px + env(safe-area-inset-bottom))); }
 .m-slot{ appearance:none; -webkit-appearance:none; position:relative; font:inherit; font-size:13px; letter-spacing:1px; line-height:1;
-         color:var(--green); background:none; border:0; padding:5px 0 0; min-width:0; touch-action:manipulation;
+         color:var(--green); background:none; border:0; padding:4px 0 0; min-width:0; touch-action:manipulation;
          display:flex; justify-content:center; align-items:flex-start; }
 .m-slot::after{ content:''; position:absolute; inset:-30px 0 0; }
-.m-slot span{ padding:1px 3px; }
+.m-slot span{ padding:1px 3px; border:1px solid transparent; }
 .m-slot.on span{ background:var(--c-white); color:var(--bg); }
+.m-slot.current span{ border-color:var(--c-white); background:rgba(var(--green-rgb),.13); }
 .m-slot.warn span{ background:var(--c-yellow); color:var(--bg); }
-#m-side{ position:absolute; z-index:3; left:0; top:calc(64px + env(safe-area-inset-top)); bottom:92px; width:44px;
-         display:flex; flex-direction:column-reverse; pointer-events:none; }
+/* Avlasning over knappen (GPS: felmarginal | tid sedan fix) */
+.m-slot small{ position:absolute; bottom:100%; left:50%; transform:translateX(-50%); white-space:nowrap; font-size:14px;
+               padding-bottom:3px; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
+.m-slot small:empty{ display:none; }
+/* Vanster kant: slot 1 overst. Tomma slots tar inga tryck. */
+#m-side{ position:absolute; z-index:3; left:0; top:calc(38px + var(--m-center-h) + env(safe-area-inset-top)); bottom:36px; width:44px;
+         display:flex; flex-direction:column; pointer-events:none; }
 #m-side .m-slot{ flex:1; min-height:0; pointer-events:auto; align-items:center; justify-content:flex-start; padding:0 0 0 2px; }
 #m-side .m-slot::after{ inset:0; }
-#m-side span{ writing-mode:vertical-rl; transform:rotate(180deg); background:var(--bg); padding:3px 1px; }
+#m-side span{ writing-mode:vertical-rl; transform:rotate(180deg); padding:3px 1px; background:var(--bg); }
 #m-side .m-slot.on span{ background:var(--c-white); }
 
 /* Knappar i panelerna */
-.m-btn{ appearance:none; -webkit-appearance:none; font:inherit; color:var(--green); background:var(--bg);
-        border:1px solid var(--green-dim); min-height:52px; padding:2px; font-size:17px; letter-spacing:1px; line-height:1.1;
-        display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; touch-action:manipulation; }
-.m-btn small{ font-size:12px; letter-spacing:0; max-width:100%; overflow:hidden; white-space:nowrap; }
+.m-btn{ appearance:none; -webkit-appearance:none; font:inherit; color:var(--green); background:none; border:1px solid transparent;
+        min-height:46px; min-width:0; padding:2px; font-size:17px; letter-spacing:1px; line-height:1.1;
+        display:flex; flex-direction:column; align-items:center; justify-content:center; touch-action:manipulation; }
+.m-btn span, .m-btn small{ display:block; font-size:17px; white-space:nowrap; max-width:100%; overflow:hidden; }
 .m-btn small:empty{ display:none; }
-.m-btn.on{ background:var(--c-white); color:var(--bg); border-color:var(--c-white); }
-.m-btn.warn{ background:var(--c-yellow); color:var(--bg); border-color:var(--c-yellow); }
+.m-btn.on span{ background:var(--c-white); color:var(--bg); padding:3px 3px 0; }
+.m-btn.warn span{ background:var(--c-yellow); color:var(--bg); padding:3px 3px 0; }
+.m-btn.current{ border-color:var(--c-white); background:rgba(var(--green-rgb),.13); }
 
 /* Helskarmspaneler (over kartan, knappmenyn ligger kvar) */
 #m-panel{ position:absolute; z-index:5; inset:0; background:var(--bg); overflow-y:auto; -webkit-overflow-scrolling:touch;
           padding:calc(10px + env(safe-area-inset-top)) 10px 40px; }
 #m-panel[hidden]{ display:none; }
-.m-title{ font-size:22px; letter-spacing:2px; margin-bottom:8px; }
 .m-head{ font-size:14px; letter-spacing:2px; color:var(--green-dim); margin:14px 0 4px; }
-.m-note{ font-size:14px; color:var(--green-dim); margin:6px 0; overflow-wrap:anywhere; }
+.m-credit{ font-size:12px; color:var(--green-dim); margin-top:24px; overflow-wrap:anywhere; }
+.m-value{ font-size:22px; letter-spacing:2px; padding:4px; }
+.m-none{ font-size:17px; letter-spacing:1px; padding:4px; }
 .m-rows{ display:flex; flex-direction:column; gap:3px; }
-.m-row{ align-items:flex-start; text-align:left; min-height:46px; padding:6px 10px; width:100%; font-size:18px; }
-.m-row small{ font-size:13px; margin-top:2px; }
-.m-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
-.m-grid .m-btn, .m-grid2 .m-btn{ min-height:46px; }
+.m-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; }
 .m-grid2{ display:grid; grid-template-columns:repeat(2, 1fr); gap:3px; }
-.m-box{ border:1px solid var(--green-dim); padding:8px 10px 10px; margin-bottom:8px; }
-.m-box .m-head:first-child{ margin-top:0; }
-.m-kv{ display:flex; justify-content:space-between; gap:8px; font-size:18px; letter-spacing:1px; padding:4px 0; }
-.m-kv span:first-child{ color:var(--green-dim); font-size:14px; letter-spacing:2px; align-self:center; }
-.m-big{ font-size:34px; letter-spacing:2px; }
 /* Punktrad: (ruttnummer) nummer, namn, koordinat */
-.m-pt{ display:grid; grid-template-columns:62px 1fr; gap:0 6px; align-items:center; text-align:left; }
+.m-pt{ display:grid; grid-template-columns:62px 1fr; gap:0 6px; align-items:center; text-align:left; padding:4px; width:100%; }
 .m-pt .m-no{ color:var(--green-dim); font-size:15px; }
 .m-pt .m-crd{ grid-column:2; font-size:13px; }
 
 .m-input{ appearance:none; -webkit-appearance:none; width:100%; font:inherit; font-size:18px; letter-spacing:1px; padding:10px;
-          color:var(--green); background:var(--bg); border:2px solid var(--green); outline:none; caret-color:var(--green); }
-.m-dim{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; align-items:center; text-align:center; font-size:20px; }
+          color:var(--green); background:var(--bg); border:1px solid var(--green); outline:none; caret-color:var(--green); }
+.m-input::placeholder{ color:var(--green-dim); }
+.m-form{ display:grid; grid-template-columns:1fr auto; gap:3px; }
+.m-form .m-btn{ min-width:56px; }

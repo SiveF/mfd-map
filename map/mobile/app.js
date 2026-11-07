@@ -13,16 +13,18 @@
   const S = window.MAP_SOURCES, P = MapMarks.palette(), rgbOf = MapMarks.rgbOf;
   const $ = function(id){ return document.getElementById(id); };
   const KEY_DATA = 'mfdMapMobile:data', KEY_UI = 'mfdMapMobile:ui', KEY_SKETCH = 'mfdMapMobile:sketch';
-  const BAR_PX = 100, TOUCH_PX = 24, MAX_FILE = 4e6;   // skalstock, traffyta for fingret, exportfilens tak
+  const TOUCH_PX = 24, MAX_FILE = 4e6;                 // traffyta for fingret, exportfilens tak
 
   // Lagre tak an datorn: iOS stanger sidan om den tar for mycket minne. Rymmer det som
   // syns pa en telefon aven vriden (~25 rutor), en DEM-ruta ar ~1 MB.
   Object.assign(MapLayers.limits, { rasterTiles: 120, demTiles: 40, demProducts: 30, contourSS: 2 });
   const VT_TILES = 80;
 
-  MapDiag.CATALOG.push(['IMP-01', 'Exportfilen kunde inte läsas in - tidigare data ligger kvar'],
-                       ['SKC-01', 'SKCH: skissen kunde inte sparas på telefonen'],
-                       ['GPS-01', 'GPS: ingen position (nekad, ingen signal eller sidan körs utan https)']);
+  // Bara det som kan handa pa telefonen, pa engelska. Datorns katalog i diag.js rors inte.
+  MapDiag.CATALOG.splice(0, MapDiag.CATALOG.length,
+    ['JS-01', 'Script error'], ['JS-02', 'Unhandled async error'], ['RES-01', 'File failed to load'], ['FONT-01', 'Font failed to load'],
+    ['TILE-02', 'Map tiles or elevation data unavailable'], ['STOR-02', 'Stored data is corrupt'], ['CRD-02', 'GOTO: invalid coordinate'],
+    ['IMP-01', 'Import failed, previous data kept'], ['SKC-01', 'Sketch could not be saved'], ['GPS-01', 'No GPS position']);
 
   // localStorage kan kasta (privat lage, full lagring).
   const ls = {
@@ -33,7 +35,7 @@
   // ---- Importerad data + MapStore for MapLists/MapDraw. Bara skissen sparas, for sig. ----
   let data = null;
   try{ const t = ls.get(KEY_DATA); if(t) data = MapExport.parse(t); }
-  catch(e){ MapDiag.raise('IMP-01', 'sparad data: ' + e.message); }
+  catch(e){ MapDiag.raise('IMP-01', 'stored data: ' + e.message); }
   window.MapStore = function(name){
     if(name === 'lists') return { load: function(cb){ cb(data ? JSON.stringify(data.lists) : ''); }, save: function(){} };
     return {
@@ -44,7 +46,7 @@
       },
       save: function(t){
         if(ls.set(KEY_SKETCH, JSON.stringify(JSON.parse(t).sketch))) MapDiag.clear('SKC-01');
-        else MapDiag.raise('SKC-01', 'lagringen är full');
+        else MapDiag.raise('SKC-01', 'storage full');
       },
     };
   };
@@ -56,7 +58,7 @@
   let base = ui.base || 'strt', dim = ui.dim || 10, baseOpen = false;
   const start = ui.lon != null ? ui : (data && data.view) || { lat: 62, lon: 16, zoom: 4, rot: 0 };
   const fmtDist = function(m){ return MapMarks.fmtDist(m, unit); };
-  const fmtAng = function(az){ return MapMarks.fmtAng(az, ang); };
+  const fmtAng = function(az){ return MapMarks.fmtAng(az, ang).replace(/\D/g, ''); };   // bara siffrorna
 
   // ---- Kartan (ritordning = ordningen har, samma som pa datorn) ----
   const view = MapView($('m-map'), { bg: P.bg, lat: start.lat, lon: start.lon, zoom: start.zoom, minZoom: 2, maxZoom: 19,
@@ -90,10 +92,10 @@
   const roadsC = view.addLayer(MapLayers.cached([ML.roads], { id: 'roadsC' }));
   view.addLayer(ML.names);
   const OVERLAYS = {
-    names:     { label: 'NAMES', l: ML.names, set: function(v){ ML.names.visible = v; } },
-    roads:     { label: 'ROADS', l: ML.roads, set: function(v){ ML.roads.visible = v; roadsC.invalidate(); } },
-    water:     { label: 'WATER', l: ML.water, set: function(v){ ML.water.visible = v; waterC.invalidate(); } },
-    topolines: { label: 'TOPO LINES', l: ML.topoLines, set: function(v){ ML.topoLines.visible = v; } },
+    names:     { label: 'NAME', l: ML.names, set: function(v){ ML.names.visible = v; } },
+    roads:     { label: 'ROAD', l: ML.roads, set: function(v){ ML.roads.visible = v; roadsC.invalidate(); } },
+    water:     { label: 'WATR', l: ML.water, set: function(v){ ML.water.visible = v; waterC.invalidate(); } },
+    topolines: { label: 'TOPO', l: ML.topoLines, set: function(v){ ML.topoLines.visible = v; } },
   };
   const ovOn = ui.ov || { names: true, roads: true, water: true, topolines: false };
   Object.keys(OVERLAYS).forEach(function(k){ OVERLAYS[k].set(!!ovOn[k]); });
@@ -105,16 +107,20 @@
     colors: { white: P.white, red: P.red, yellow: P.yellow, green: P.green, blue: P.blue, magenta: P.magenta },
     lists: function(){ return lists ? lists.all() : []; },
     upks: function(id){ return lists ? lists.upks(id) : []; } });
-  // Litet kors i kartans mitt: det ar den punkten koordinaten overst galler.
+  // Harkorset i kartans mitt (koordinaten overst galler dar) + vit pil mot norr utanfor dess yttre del.
   view.addLayer({ id: 'center', visible: true, status: '', draw: function(ctx, v){
     if(draw.sketching()) return;
     const x = v.w / 2, y = v.h / 2;
     ctx.save();
     [[P.bg, 4], [P.white, 1.5]].forEach(function(s){
       ctx.strokeStyle = s[0]; ctx.lineWidth = s[1];
-      ctx.beginPath(); ctx.moveTo(x - 9, y); ctx.lineTo(x - 3, y); ctx.moveTo(x + 3, y); ctx.lineTo(x + 9, y);
-      ctx.moveTo(x, y - 9); ctx.lineTo(x, y - 3); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 9); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 16, y); ctx.lineTo(x - 3, y); ctx.moveTo(x + 3, y); ctx.lineTo(x + 16, y);
+      ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 3); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 16); ctx.stroke();
     });
+    ctx.translate(x, y); ctx.rotate(v.rot);
+    ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(6, -21); ctx.lineTo(-6, -21); ctx.closePath();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = P.bg; ctx.stroke();
+    ctx.fillStyle = P.white; ctx.fill();
     ctx.restore();
   } });
 
@@ -141,15 +147,16 @@
     if(l) l.points.forEach(function(pt){ test(pt, { pt: pt }); });
     return best;
   }
-  // Tryck pa en punkt = valj den; pa tom karta = stang kortet, eller (inget valt) fri punkt.
-  // true = hanterat. Samma beslut for musklick (pointSelect) och fingertryck (MapTouch).
+  const crosshair = function(){ return { x: view.w / 2, y: view.h / 2 }; };
+  const atCrosshair = function(){ const c = crosshair(); return view.toLonLat(c.x, c.y); };
+  // Tryck pa en punkt = valj den; annars hamnar aktiva punkten vid harkorset, inte under fingret.
+  // Samma beslut for musklick (pointSelect) och fingertryck (MapTouch).
   function pick(p){
     const h = hitAt(p);
-    if(h && h.pt){ lists.select(h.pt); return true; }
-    if(h){ selTitle = 'UPK ' + h.upk.label; sel.set(h.upk, 'upk'); return true; }
-    if(sel.get()){ sel.clear(); return true; }
-    selTitle = 'PUNKT';
-    return false;
+    if(h && h.pt) lists.select(h.pt);
+    else if(h){ selTitle = 'UPK ' + h.upk.label; sel.set(h.upk, 'upk'); }
+    else{ selTitle = 'POINT'; sel.set(atCrosshair()); }
+    return true;
   }
   const sel = MapTools.pointSelect(view, { color: P.blue, outline: P.bg,
     marker: function(){ return !lists.selected(); },
@@ -166,49 +173,79 @@
   lists = MapLists({ onChange: function(){ view.redraw(); },
                      onSelect: function(pt){ sel.set(pt, 'list'); } });
 
-  const gps = MapGps(view, { color: P.blue, outline: P.bg,
-    onFix: function(){ MapDiag.clear('GPS-01'); renderPoint(); renderHud(); renderGps(); },
+  const gps = MapGps(view, { color: P.green, outline: P.bg,
+    onFix: function(){ MapDiag.clear('GPS-01'); renderPoint(); renderHud(); refreshBar(); },
     onError: function(t){ MapDiag.raise('GPS-01', t); refreshBar(); } });
 
+  // RLR: som pa datorn, men pekaren ar harkorset. Finns en aktiv punkt borjar linjalen dar,
+  // annan ande foljer harkorset tills man trycker. Andarna gar att dra.
+  const ruler = MapTools.ruler(view, { color: P.white, outline: P.bg, label: function(a, b, fromPt){
+    const g = MapCoords.inverse(a.lat, a.lon, b.lat, b.lon);
+    return fmtDist(g.dist) + (fromPt ? '   ' + fmtAng(g.az) : '');
+  } });
+  function setRuler(on){
+    view.pointer = on ? crosshair() : null;
+    ruler.set(on, on ? sel.get() : null);
+  }
+
   MapTouch(view, {
-    tap: function(p){ if(!draw.sketching() && !pick(p)) sel.set(view.toLonLat(p.x, p.y)); },
-    grab: function(p){ return draw.sketching() ? view.grabAt(p) : null; },
+    tap: function(p){
+      if(draw.sketching()) return;
+      if(ruler.active()) ruler.click(crosshair()); else pick(p);
+    },
+    grab: function(p){ return draw.sketching() || ruler.active() ? view.grabAt(p) : null; },
     moved: function(){ if(gps.follow()){ gps.setFollow(false); refreshBar(); } },
   });
   function renderPoint(){
     const el = $('m-point'), a = sel.get();
     el.hidden = !a;
     if(!a) return;
-    const pt = lists.selected(), l = lists.current();
+    const pt = lists.selected();
     el.innerHTML = '';
     const add = function(cls, text, tag){ const d = document.createElement(tag || 'div'); d.className = cls; d.textContent = text; el.appendChild(d); return d; };
     add('mp-name', pt ? pt.name : selTitle);
-    const x = add('m-btn', 'X', 'button');
-    x.addEventListener('click', function(){ sel.clear(); });
-    x.style.gridRow = 'span 2';
-    add('mp-sub', pt ? (l ? l.name : '') + (pt.type ? ' · ' + pt.type.toUpperCase() : '') + (pt.rte ? ' · RUTT ' + pt.rte : '') : ' ');
+    add('m-btn', 'X', 'button').addEventListener('click', function(){ sel.clear(); });
     add('mp-line', MapCoords.format(fmt, a.lat, a.lon));
-    add('mp-line', 'HÖJD ' + (actH == null ? '--' : Math.round(actH) + ' M'));
+    add('mp-line', 'ELEV ' + (actH == null ? '--' : Math.round(actH)));
     const g = gps.pos(), inv = g && MapCoords.inverse(g.lat, g.lon, a.lat, a.lon);
-    add('mp-line', 'AVST ' + (inv ? fmtDist(inv.dist) : '--') + '   BÄR ' + (inv ? fmtAng(inv.az) : '--'));
+    if(inv) add('mp-line mp-gps', 'DIST ' + fmtDist(inv.dist) + '   BRG ' + fmtAng(inv.az));
   }
 
-  // ---- Overst, kompass, skalstock, kartleverantor, laddning ----
-  function renderHud(){
-    $('m-center').textContent = MapCoords.format(fmt, view.lat, view.lon);
-    const g = gps.pos();
-    $('m-pos').textContent = g ? MapCoords.format(fmt, g.lat, g.lon) + '  ±' + Math.round(g.acc) + ' M' : '';
+  // ---- Overst, kompass, skala, laddning ----
+  // Koordinaten fyller overkanten. Storleken raknas bara nar textens langd eller bredden andras,
+  // annars skulle den hoppa med varje siffra.
+  const fitCtx = document.createElement('canvas').getContext('2d');
+  let fitKey = '';
+  function fitCenter(el, t){
+    const w = el.clientWidth, key = t.length + '/' + w;
+    if(key === fitKey || !w) return;
+    fitKey = key;
+    fitCtx.font = '100px ViperDisplay';
+    el.style.fontSize = Math.min(44, Math.floor(100 * w / fitCtx.measureText(t.replace(/\d/g, '8')).width)) + 'px';
+    $('m-stage').style.setProperty('--m-center-h', el.offsetHeight + 'px');
   }
-  $('map-scale-bar').style.width = BAR_PX + 'px';
+  function renderHud(){
+    const t = MapCoords.format(fmt, view.lat, view.lon), g = gps.pos();
+    $('m-center').textContent = t;
+    fitCenter($('m-center'), t);
+    $('m-pos').textContent = g ? MapCoords.format(fmt, g.lat, g.lon) : '';
+  }
   $('map-compass').addEventListener('click', function(){ view.setRotation(0); });
+  // Kartleverantorer och krediter, visas pa MAP-sidan.
+  const credits = function(){
+    const a = MAPS[base].attribution;
+    return (/Esri/.test(a) ? 'Powered by Esri · ' : '') + a + (ML.water.visible || ML.roads.visible || ML.names.visible ? ' · OpenFreeMap © OpenMapTiles © OpenStreetMap' : '');
+  };
   let lastStatus = null;
   view.onChange(function(v){
     renderHud();
+    if(ruler.active()) v.pointer = crosshair();        // skarmen kan ha andrat storlek
     const deg = v.rot * 180 / Math.PI;
+    $('map-compass').hidden = Math.abs(Math.sin(v.rot / 2)) < 0.0025;   // norr upp (inom ~0,3 grader)
     $('map-compass-rot').setAttribute('transform', 'rotate(' + deg + ')');
     $('map-compass-up').textContent = fmtAng((360 - deg) % 360);
-    $('map-scale-txt').textContent = MapScale.info(v.zoom, v.lat, BAR_PX, unit).text;
-    $('map-src').textContent = (/Esri/.test(MAPS[base].attribution) ? 'Powered by Esri · ' : '') + MAPS[base].attribution + (ML.water.visible || ML.roads.visible || ML.names.visible ? ' · OpenFreeMap © OpenMapTiles © OpenStreetMap' : '');
+    // Nederkantens langd i meter, tva vardesiffror.
+    $('map-scale-txt').textContent = String(Number(MapScale.meters(v.zoom, v.toLonLat(v.w / 2, v.h).lat, v.w).toPrecision(2)));
     let done = 0, total = 0;
     const off = [];
     v.layers.forEach(function(l){
@@ -225,7 +262,8 @@
     }
   });
 
-  // ---- Slots. 1-6 i bottenmarginalen, 7-12 utmed vanster kant (nerifran). Utan label = tom. ----
+  // ---- Slots: 6 i bottenmarginalen, 6 utmed vanster kant (overst forst). Utan label = tom. ----
+  const SIDE_EMPTY = function(){ return { side: true }; };
   const SLOTS = [
     { label: 'MAP', panel: 'map' },
     { label: 'NAV', panel: 'nav', also: 'goto' },
@@ -233,13 +271,26 @@
     { label: 'SKCH', on: function(){ return draw.sketching(); }, act: function(){
         const b = !draw.sketching();
         draw.setSketch(b);
-        if(b){ showPanel(null); sel.clear(); gps.setFollow(false); }   // kartan ska ligga still under fingret
+        if(b){ showPanel(null); sel.clear(); setRuler(false); gps.setFollow(false); }   // kartan ska ligga still under fingret
       } },
-    { label: 'GPS', panel: 'gps', on: function(){ return gps.on(); } },
+    { label: 'GPS', on: function(){ return gps.on(); },
+      // Felmarginal | sekunder sedan senaste fix.
+      note: function(){
+        if(!gps.on()) return '';
+        const g = gps.pos();
+        return g ? Math.round(g.acc) + ' | ' + Math.max(0, Math.round((Date.now() - g.t) / 1000)) : '-- | --';
+      },
+      act: function(){ gps.setOn(!gps.on()); renderPoint(); renderHud(); } },
     { label: 'OPTN', panel: 'optn', also: 'diag', warn: function(){ return MapDiag.active().length > 0; } },
-    // Vanster kant: det aktiva verktygets funktioner (som Select functions pa datorn).
+    SIDE_EMPTY(), SIDE_EMPTY(),
+    { side: true, label: 'RLR', on: function(){ return ruler.active(); }, act: function(){
+        const b = !ruler.active();
+        if(b) draw.setSketch(false);
+        setRuler(b);
+      } },
+    SIDE_EMPTY(), SIDE_EMPTY(),
+    // Det aktiva verktygets funktion, som Select functions pa datorn.
     { side: true, label: function(){ return draw.sketching() ? 'UNDO' : ''; }, act: function(){ draw.popSketch(); } },
-    { side: true }, { side: true }, { side: true }, { side: true }, { side: true },
   ];
   let panel = null;
   function button(parent, label, sub, cls, act){
@@ -255,6 +306,7 @@
     d.el = document.createElement('button');
     d.el.className = 'm-slot';
     d.el.appendChild(document.createElement('span'));
+    d.el.appendChild(document.createElement('small'));
     d.el.addEventListener('click', function(){
       if(d.panel) showPanel(panel === d.panel ? null : d.panel); else if(d.act) d.act();
       saveUi(); refreshBar();
@@ -267,10 +319,13 @@
       const open = !!d.panel && (panel === d.panel || panel === d.also);
       d.el.firstChild.textContent = label;
       d.el.style.visibility = label ? '' : 'hidden';
-      d.el.classList.toggle('on', open || (!!d.on && d.on()));
+      d.el.lastChild.textContent = d.note ? d.note() : '';
+      d.el.classList.toggle('current', open);
+      d.el.classList.toggle('on', !!d.on && d.on());
       d.el.classList.toggle('warn', !open && !!d.warn && d.warn());
     });
   }
+  setInterval(refreshBar, 1000);                       // tiden sedan senaste fix
   MapDiag.onChange(function(){ refreshBar(); if(panel === 'diag') renderPanel(); });
 
   // ---- Paneler ----
@@ -288,22 +343,6 @@
   const textEl = function(parent, cls, text){ const d = document.createElement('div'); d.className = cls; d.textContent = text; parent.appendChild(d); return d; };
   const rowsEl = function(parent, cls){ const d = document.createElement('div'); d.className = cls || 'm-rows'; parent.appendChild(d); return d; };
 
-  const kv = function(parent, key, val, id){
-    const d = document.createElement('div'); d.className = 'm-kv';
-    const k = document.createElement('span'); k.textContent = key; d.appendChild(k);
-    const v = document.createElement('span'); v.textContent = val; if(id) v.id = id; d.appendChild(v);
-    parent.appendChild(d);
-  };
-  // Lever i oppen GPS-panel: bara texten byts, knapparna ligger kvar (annars missas tryck).
-  function renderGps(){
-    const a = $('m-gps-age'), g = gps.pos();
-    if(!a) return;
-    const age = g ? Math.max(0, Math.round((Date.now() - g.t) / 1000)) : null;
-    a.textContent = age == null ? '--' : age < 60 ? age + ' S' : Math.floor(age / 60) + ':' + String(age % 60).padStart(2, '0');
-    $('m-gps-acc').textContent = g ? '±' + Math.round(g.acc) + ' M' : '--';
-  }
-  setInterval(renderGps, 1000);
-
   // Batteri: finns bara i webblasare med Battery API. Safari pa iPhone har det inte.
   let battery = null;
   if(navigator.getBattery) navigator.getBattery().then(function(b){
@@ -312,56 +351,52 @@
   }, function(){});
   function batteryLeft(){
     if(!battery) return '--:--';
-    if(battery.charging || !isFinite(battery.dischargingTime)) return 'LADDAR';
+    if(battery.charging || !isFinite(battery.dischargingTime)) return 'CHRG';
     const m = Math.round(battery.dischargingTime / 60);
     return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   }
 
+  const choice = function(on){ return on ? 'current' : ''; };   // valt alternativ = vit ram
+  const toggle = function(on){ return on ? 'on' : ''; };        // av/pa = vit fyllning runt texten
   const PANELS = {
     map: function(el){
-      button(el, 'BASE: ' + MAPS[base].short, '', 'm-row', function(){ baseOpen = !baseOpen; renderPanel(); });
-      if(baseOpen) bases.forEach(function(g){
-        textEl(el, 'm-head', g.head);
-        const r = rowsEl(el);
-        g.maps.forEach(function(m){
-          button(r, m.label, '', 'm-row' + (m.id === base ? ' on' : ''), function(){ base = m.id; baseOpen = false; applyBase(); again(); });
-        });
-      });
+      button(rowsEl(el, 'm-grid'), 'BASE', MAPS[base].short, choice(baseOpen), function(){ baseOpen = !baseOpen; renderPanel(); });
+      if(baseOpen){
+        const g = rowsEl(el, 'm-grid');
+        bases.forEach(function(x){ x.maps.forEach(function(m){
+          button(g, m.short, '', choice(m.id === base), function(){ base = m.id; baseOpen = false; applyBase(); again(); });
+        }); });
+      }
       if(!MAPS[base].dem){
-        textEl(el, 'm-head', 'LJUSSTYRKA');
-        const r = rowsEl(el, 'm-dim');
-        button(r, '-', '', '', function(){ dim = Math.max(1, dim - 1); applyBase(); again(); });
-        textEl(r, '', String(dim));
-        button(r, '+', '', '', function(){ dim = Math.min(10, dim + 1); applyBase(); again(); });
+        const r = rowsEl(el, 'm-grid');
+        button(r, 'DIM', String(dim));
+        button(r, '▼', '', '', function(){ dim = Math.max(1, dim - 1); applyBase(); again(); });
+        button(r, '▲', '', '', function(){ dim = Math.min(10, dim + 1); applyBase(); again(); });
       }
       textEl(el, 'm-head', 'LAYERS');
       const c = rowsEl(el, 'm-grid2');
       Object.keys(OVERLAYS).forEach(function(k){
         const o = OVERLAYS[k];
-        button(c, o.label, '', o.l.visible ? 'on' : '', function(){ o.set(!o.l.visible); view.redraw(); again(); });
+        button(c, o.label, '', toggle(o.l.visible), function(){ o.set(!o.l.visible); view.redraw(); again(); });
       });
-      textEl(el, 'm-head', 'OLEAT');
       const st = draw.state();
-      if(!st.oleats.length){ textEl(el, 'm-note', 'INGA OLEATER. IMPORTERA EN EXPORTFIL FRÅN DATORN (NAV).'); return; }
-      const r = rowsEl(el);
-      st.oleats.forEach(function(ol){
-        const upk = ol.upk && lists.all().find(function(l){ return l.id === ol.upk; });
-        button(r, ol.name, ol.shapes.length + ' FIGURER' + (upk ? ' · UPK ' + upk.name : ''),
-               'm-row' + (st.on.indexOf(ol.id) >= 0 ? ' on' : ''), function(){ draw.toggleOleat(ol.id); ui.on = draw.activeSet().on; again(); });
-      });
+      if(st.oleats.length){
+        textEl(el, 'm-head', 'OLEAT');
+        const r = rowsEl(el, 'm-grid2');
+        st.oleats.forEach(function(ol){
+          button(r, ol.name, '', toggle(st.on.indexOf(ol.id) >= 0), function(){ draw.toggleOleat(ol.id); ui.on = draw.activeSet().on; again(); });
+        });
+      }
+      textEl(el, 'm-credit', credits());
     },
     nav: function(el){
-      textEl(el, 'm-title', 'NAV');
-      const top = rowsEl(el, 'm-grid2');
+      const top = rowsEl(el, 'm-grid');
       button(top, 'GOTO', '', '', function(){ showPanel('goto'); });
-      button(top, 'IMPORT', '', '', function(){ $('m-file').click(); });
-      textEl(el, 'm-note', data
-        ? 'EXPORTERAD ' + String(data.exported || '').slice(0, 16).replace('T', ' ') + ' UTC · ' + data.lists.lists.length + ' LISTOR · ' + data.drawings.oleats.length + ' OLEATER. IMPORT ERSÄTTER ALLT UTOM SKISSEN.'
-        : 'INGEN DATA ÄNNU. IMPORTERA EN EXPORTFIL FRÅN DATORN.');
+      button(top, 'IMPT', '', '', function(){ $('m-file').click(); });
       const st = lists.state();
       if(!st.lists.length) return;
       textEl(el, 'm-head', 'LIST');
-      const r = rowsEl(el);
+      const r = rowsEl(el, 'm-grid2');
       const pickList = function(i){
         st.active = i; ui.listId = i == null ? null : st.lists[i].id;
         lists.select(null);
@@ -370,31 +405,33 @@
         if(ids.length){ draw.setActiveSet({ on: ids }); ui.on = ids; }
         again();
       };
-      button(r, 'NONE', '', 'm-row' + (st.active == null ? ' on' : ''), function(){ pickList(null); });
+      button(r, 'NONE', '', choice(st.active == null), function(){ pickList(null); });
       st.lists.forEach(function(l, i){
-        button(r, l.name, l.points.length + ' PUNKTER', 'm-row' + (st.active === i ? ' on' : ''), function(){ pickList(i); });
+        button(r, l.name, '', choice(st.active === i), function(){ pickList(i); });
       });
       const cur = lists.current();
       if(!cur) return;
-      textEl(el, 'm-head', 'PUNKTER I ' + cur.name);
+      textEl(el, 'm-head', 'POINTS');
       const rows = rowsEl(el);
       cur.points.forEach(function(pt, i){
-        const b = button(rows, '', '', 'm-row m-pt' + (pt === lists.selected() ? ' on' : ''), function(){
+        const b = document.createElement('button');
+        b.className = 'm-btn m-pt ' + choice(pt === lists.selected());
+        b.addEventListener('click', function(){
           gps.setFollow(false);
           view.setCenter(pt.lon, pt.lat, view.zoom < 11 ? 13 : view.zoom);
           lists.select(pt);
           showPanel(null);
         });
-        b.innerHTML = '';
         textEl(b, 'm-no', (pt.rte ? '(' + pt.rte + ') ' : '') + (i + 1));
         textEl(b, '', pt.name);
         textEl(b, 'm-crd', MapCoords.format(fmt, pt.lat, pt.lon));
+        rows.appendChild(b);
       });
     },
     goto: function(el){
-      textEl(el, 'm-title', 'GOTO');
       const f = document.createElement('form'), inp = document.createElement('input');
-      inp.className = 'm-input'; inp.placeholder = 'KOORDINAT'; inp.setAttribute('enterkeyhint', 'go');
+      f.className = 'm-form';
+      inp.className = 'm-input'; inp.placeholder = 'COORD'; inp.setAttribute('enterkeyhint', 'go');
       inp.setAttribute('autocapitalize', 'characters'); inp.setAttribute('autocorrect', 'off'); inp.spellcheck = false;
       f.appendChild(inp);
       f.addEventListener('submit', function(ev){
@@ -412,53 +449,30 @@
         showPanel(null);
       });
       el.appendChild(f);
-      textEl(el, 'm-note', 'MGRS, UTM, DD, DMS, DDM, SWEREF 99 ELLER RT 90.');
-      button(el, 'GÅ', '', 'm-row', function(){ f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(new Event('submit', { cancelable: true })); }).style.marginTop = '8px';
+      button(f, 'GO', '', '', function(){ f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(new Event('submit', { cancelable: true })); }).type = 'button';
       inp.focus();
     },
-    gps: function(el){
-      textEl(el, 'm-title', 'GPS');
-      const c = rowsEl(el, 'm-grid');
-      [['hi', 'HI'], ['lo', 'LO'], ['off', 'OFF']].forEach(function(x){
-        button(c, x[1], '', x[0] === gps.mode() ? 'on' : '', function(){ gps.setMode(x[0]); renderPoint(); renderHud(); again(); });
-      });
-      if(gps.on()){
-        button(el, 'FÖLJ POSITIONEN', '', 'm-row' + (gps.follow() ? ' on' : ''), function(){ gps.setFollow(!gps.follow()); again(); }).style.marginTop = '8px';
-      }
-      const box = rowsEl(el, 'm-box');
-      box.style.marginTop = '8px';
-      kv(box, 'SATELLITER', '--/--');
-      kv(box, 'SENASTE FIX', '--', 'm-gps-age');
-      kv(box, 'FELMARGINAL', '--', 'm-gps-acc');
-      textEl(el, 'm-note', 'IOS VISAR INTE ANTAL SATELLITER FÖR WEBBAPPAR.');
-      renderGps();
-    },
     optn: function(el){
-      textEl(el, 'm-title', 'OPTN');
-      const b1 = rowsEl(el, 'm-box');
-      textEl(b1, 'm-head', 'KOORDINATFORMAT');
-      const c = rowsEl(b1, 'm-grid');
+      const c = rowsEl(el, 'm-grid');
       MapCoords.FORMATS.forEach(function(x){
-        button(c, x.short || x.label, '', x.id === fmt ? 'on' : '', function(){ fmt = x.id; again(); renderPoint(); renderHud(); });
+        button(c, x.short || x.label, '', choice(x.id === fmt), function(){ fmt = x.id; again(); renderPoint(); renderHud(); });
       });
-      const b2 = rowsEl(el, 'm-box');
-      textEl(b2, 'm-head', 'VINKEL');
-      const a = rowsEl(b2, 'm-grid2');
-      [['deg', 'GRADER'], ['mil', 'STRECK']].forEach(function(x){
-        button(a, x[1], '', x[0] === ang ? 'on' : '', function(){ ang = x[0]; again(); renderPoint(); view.redraw(); });
+      textEl(el, 'm-head', 'ANGLE');
+      const a = rowsEl(el, 'm-grid');
+      [['deg', 'DEG'], ['mil', 'MIL']].forEach(function(x){
+        button(a, x[1], '', choice(x[0] === ang), function(){ ang = x[0]; again(); renderPoint(); view.redraw(); });
       });
-      const b3 = rowsEl(el, 'm-box');
-      textEl(b3, 'm-head', 'BATTERI');
-      textEl(b3, 'm-big', batteryLeft());
-      if(!battery) textEl(b3, 'm-note', 'IOS VISAR INTE BATTERITID FÖR WEBBAPPAR.');
-      button(el, 'DIAG', MapDiag.active().length ? MapDiag.active().length + ' FEL' : '',
-             'm-row' + (MapDiag.active().length ? ' warn' : ''), function(){ showPanel('diag'); });
+      textEl(el, 'm-head', 'BATTERY');
+      textEl(el, 'm-value', batteryLeft());
+      button(rowsEl(el, 'm-grid'), 'DIAG', '', MapDiag.active().length ? 'warn' : '', function(){ showPanel('diag'); }).style.marginTop = '14px';
     },
+    // Bara aktiva fel, felen ar sallsynta och skarmen smal.
     diag: function(el){
-      textEl(el, 'm-title', 'DIAG');
       const r = rowsEl(el);
       MapDiag.render(r);
-      r.querySelectorAll('.dg-fail').forEach(function(x){ r.prepend(x); });   // lang katalog, smal skarm: felen forst
+      r.querySelectorAll('.dg-row:not(.dg-fail)').forEach(function(x){ x.remove(); });
+      r.querySelectorAll('.dg-st').forEach(function(x){ x.textContent = 'FAIL'; });
+      if(!r.children.length) textEl(r, 'm-none', 'NO FAULTS');
     },
   };
 
@@ -468,11 +482,11 @@
     const f = this.files[0];
     this.value = '';
     if(!f) return;
-    if(f.size > MAX_FILE){ importFail('filen är för stor (' + Math.round(f.size / 1e6) + ' MB)'); return; }
+    if(f.size > MAX_FILE){ importFail('file too large (' + Math.round(f.size / 1e6) + ' MB)'); return; }
     f.text().then(function(t){
       let d;
       try{ d = MapExport.parse(t); }catch(e){ importFail(e.message); return; }
-      if(!ls.set(KEY_DATA, t)){ importFail('lagringen på telefonen är full'); return; }
+      if(!ls.set(KEY_DATA, t)){ importFail('storage full'); return; }
       MapDiag.clear('IMP-01');
       data = d;
       delete ui.listId; delete ui.on;
@@ -506,10 +520,10 @@
   refreshBar();
   view.resize();                                       // knappmenyn finns nu - kartan far ratt hojd
   // Canvastext anvander fonten forst nar den ar laddad.
-  if(document.fonts && document.fonts.load) document.fonts.load('18px ViperDisplay').then(function(){ ML.names.invalidate(); view.redraw(); });
+  if(document.fonts && document.fonts.load) document.fonts.load('18px ViperDisplay').then(function(){ fitKey = ''; renderHud(); ML.names.invalidate(); view.redraw(); });
   // Service worker bara pa en riktig https-adress - lokalt skulle den ge gamla filer under utveckling.
   if('serviceWorker' in navigator && window.isSecureContext && !/^(localhost|127\.)/.test(location.hostname)){
     navigator.serviceWorker.register('sw.js').catch(function(e){ MapDiag.raise('RES-01', 'sw.js: ' + e.message); });
   }
-  window.MAPM = { view: view, lists: lists, draw: draw, sel: sel, gps: gps, ML: ML, showPanel: showPanel, hitAt: hitAt };
+  window.MAPM = { view: view, lists: lists, draw: draw, sel: sel, gps: gps, ruler: ruler, ML: ML, showPanel: showPanel, hitAt: hitAt };
 })();
