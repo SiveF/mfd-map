@@ -34,7 +34,8 @@ input{ -webkit-user-select:text; user-select:text; }
 #map-compass-up{ font-size:15px; }
 
 #m-lower{ position:absolute; z-index:2; left:0; right:0; bottom:0; display:flex; flex-direction:column; pointer-events:none; }
-#m-foot{ padding:0 8px 4px calc(8px + var(--sa-l)); }
+#m-foot{ padding:0 calc(8px + var(--sa-r)) 4px 8px; }
+#map-scale{ justify-content:flex-end; }
 #map-scale-txt{ font-size:16px; }
 
 #m-erase{ position:absolute; z-index:4; left:0; right:0; top:40%; text-align:center; font-size:72px; letter-spacing:2px; pointer-events:none;
@@ -46,7 +47,7 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-bar{ position:relative; z-index:6; display:grid; grid-template-columns:repeat(6, 1fr); background:var(--bg);
         height:max(24px, calc(6px + var(--sa-b))); padding:0 var(--sa-r) 0 var(--sa-l); }
 .m-slot{ appearance:none; -webkit-appearance:none; position:relative; font:inherit; font-size:13px; letter-spacing:1px; line-height:1;
-         color:var(--green); background:none; border:0; padding:4px 0 0; min-width:0; touch-action:manipulation;
+         color:var(--green); background:none; border:0; padding:4px 0 0; min-width:0; touch-action:none;
          display:flex; justify-content:center; align-items:flex-start; }
 .m-slot::after{ content:''; position:absolute; inset:-30px 0 0; }
 .m-slot span{ padding:1px 3px; border:1px solid transparent; }
@@ -65,11 +66,10 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-side span{ writing-mode:vertical-rl; text-orientation:upright; letter-spacing:0; padding:3px 1px;
              -webkit-text-stroke:2.5px var(--bg); paint-order:stroke fill; }
 #m-side .m-slot.on span{ background:var(--c-white); -webkit-text-stroke:0; }
-/* Liggande: vanster kolumn i full hojd, koordinater och skala bredvid den */
+/* Liggande: vanster kolumn i full hojd, koordinaterna bredvid den */
 #m-app.land #m-side{ top:calc(4px + var(--sa-t)); bottom:4px; }
 #m-app.land #m-side .m-slot{ font-size:11px; }
 #m-app.land #m-hud{ left:calc(46px + var(--sa-l)); }
-#m-app.land #m-foot{ padding-left:calc(46px + var(--sa-l)); }
 
 /* Knappar i panelerna */
 .m-btn{ appearance:none; -webkit-appearance:none; font:inherit; color:var(--green); background:none; border:1px solid transparent;

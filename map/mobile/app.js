@@ -258,10 +258,12 @@
     moved: release,
     lock: function(){ return { noRot: ori !== 'free', noPan: ori === 'gps' }; },
     local: function(x, y){ return MapTouch.unturn(turn, window.innerWidth, window.innerHeight, x, y); },
+    bar: $('m-bar'),
+    edges: function(){ return !panel && !draw.sketching(); },
   });
 
   // ---- Overst, kompass, skala, laddning ----
-  // Koordinaten tar 85 % av overkanten. Storleken raknas bara nar textens langd eller bredden andras,
+  // Koordinaten tar 75 % av overkanten. Storleken raknas bara nar textens langd eller bredden andras,
   // annars skulle den hoppa med varje siffra.
   const fitCtx = document.createElement('canvas').getContext('2d');
   let fitKey = '';
@@ -270,7 +272,7 @@
     if(key === fitKey || !w) return;
     fitKey = key;
     fitCtx.font = '100px ViperDisplay';
-    el.style.fontSize = Math.min(38, Math.floor(85 * w / fitCtx.measureText(t.replace(/\d/g, '8')).width)) + 'px';
+    el.style.fontSize = Math.min(34, Math.floor(75 * w / fitCtx.measureText(t.replace(/\d/g, '8')).width)) + 'px';
     $('m-stage').style.setProperty('--m-center-h', el.offsetHeight + 'px');
   }
   function renderHud(){
