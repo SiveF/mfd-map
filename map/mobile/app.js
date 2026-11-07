@@ -25,7 +25,8 @@
   MapDiag.CATALOG.splice(0, MapDiag.CATALOG.length,
     ['JS-01', 'Script error'], ['JS-02', 'Unhandled async error'], ['RES-01', 'File failed to load'], ['FONT-01', 'Font failed to load'],
     ['TILE-02', 'Map tiles or elevation data unavailable'], ['STOR-02', 'Stored data is corrupt'], ['CRD-02', 'GOTO: invalid coordinate'],
-    ['IMP-01', 'Import failed, previous data kept'], ['SKC-01', 'Sketch could not be saved'], ['GPS-01', 'No GPS position']);
+    ['IMP-01', 'Import failed, previous data kept'], ['SKC-01', 'Sketch could not be saved'], ['GPS-01', 'No GPS position'],
+    ['LOS-01', 'LOS: no elevation data'], ['LOS-02', 'LOS: trees or buildings missing']);
 
   // localStorage kan kasta (privat lage, full lagring).
   const ls = {
@@ -113,6 +114,19 @@
   const vt = MapVT(S.vtiles.tilejson, S.vtiles.maxZoom, VT_TILES);
   const ML = MapMarks.mapLayers(vt, P, S.dem, function(){ return null; });   // kurvor: AUTO efter zoom
   const waterC = view.addLayer(MapLayers.cached([ML.water], { id: 'waterC' }));
+  // LOS: det som syns fran punkten = gul overlagg (map/terrain.js), samma varden som datorn utom
+  // start 750 m och taket: maxTiles 5 (datorn 11), iOS stanger sidan om den tar for mycket minne.
+  const los = MapTerrain.los(view, { url: S.dem.url, z: 13, maxTiles: 5, eye: 2, vt: vt,
+    radius: 750, minRadius: 300, maxRadius: 40000, grabPx: TOUCH_PX,
+    ring: P.yellow, outline: P.bg, fmt: fmtDist,
+    chm: 'https://data.source.coop/tge-labs/meta-chm-v2/chm/{q}.tif',
+    buildings: { get km(){ return Math.min(3, los.radius() / 1000); }, defaultH: 8 },   // bara rutorna som behovs
+    surface: function(){ return true; },
+    onWarn: function(t){ if(t) MapDiag.raise('LOS-02', t.replace('träd', 'trees').replace('hus', 'buildings')); else MapDiag.clear('LOS-02'); },
+    color: rgbOf(P.yellow), alpha: 90, onState: function(st){
+      if(st === 'fail') MapDiag.raise('LOS-01'); else if(st === 'ok') MapDiag.clear('LOS-01');
+      refreshBar();
+    } });
   view.addLayer(ML.topoLines);
   const roadsC = view.addLayer(MapLayers.cached([ML.roads], { id: 'roadsC' }));
   view.addLayer(ML.names);
@@ -199,6 +213,7 @@
     pick: pick,
     onChange: function(pt, src){
       if(src !== 'list' && lists.selected()) lists.select(null, true);
+      if(los.active()) los.set(null);                  // som pa datorn: ny punkt (eller ingen) = LOS av
       renderHud();
     } });
   lists = MapLists({ onChange: function(){ view.redraw(); },
@@ -236,7 +251,7 @@
       if(draw.sketching()) return;
       if(ruler.active()) ruler.click(crosshair()); else pick(p);
     },
-    grab: function(p){ return draw.sketching() || ruler.active() ? view.grabAt(p) : null; },
+    grab: function(p){ return draw.sketching() || ruler.active() || los.active() ? view.grabAt(p) : null; },
     moved: release,
     lock: function(){ return { noRot: ori !== 'free', noPan: ori === 'gps' }; },
     local: function(x, y){ return MapTouch.unturn(turn, window.innerWidth, window.innerHeight, x, y); },
@@ -323,13 +338,22 @@
         if(b) draw.setSketch(false);
         setRuler(b);
       } },
-    // Skissens funktioner, som Select functions pa datorn. Tryck = nasta farg, texten har fargen.
-    { side: true, color: function(){ return P[skCol]; },
-      label: function(){ return draw.sketching() ? SK_COLORS.find(function(c){ return c[0] === skCol; })[1] : ''; },
+    // LOS utgar fran aktiva punkten, finns ingen hamnar en ny vid harkorset.
+    // Under SKCH ar samma slot skissens farg: tryck = nasta, texten har fargen.
+    { side: true, color: function(){ return draw.sketching() ? P[skCol] : ''; },
+      label: function(){ return draw.sketching() ? SK_COLORS.find(function(c){ return c[0] === skCol; })[1] : 'LOS'; },
+      on: function(){ return los.active(); },
       act: function(){
-        const i = SK_COLORS.findIndex(function(c){ return c[0] === skCol; });
-        skCol = SK_COLORS[(i + 1) % SK_COLORS.length][0];
-        draw.setColor(skCol);
+        if(draw.sketching()){
+          const i = SK_COLORS.findIndex(function(c){ return c[0] === skCol; });
+          skCol = SK_COLORS[(i + 1) % SK_COLORS.length][0];
+          draw.setColor(skCol);
+        }
+        else if(los.active()) los.set(null);
+        else{
+          if(!sel.get()){ selName = ''; sel.set(atCrosshair()); }
+          los.set(sel.get());
+        }
       } },
     { side: true, label: inSketch('ERSE'), hold: function(){ draw.clearSketch(); } },
     { side: true, label: inSketch('UNDO'), act: function(){ draw.popSketch(); } },
@@ -588,5 +612,5 @@
   if('serviceWorker' in navigator && window.isSecureContext && !/^(localhost|127\.)/.test(location.hostname)){
     navigator.serviceWorker.register('sw.js').catch(function(e){ MapDiag.raise('RES-01', 'sw.js: ' + e.message); });
   }
-  window.MAPM = { view: view, lists: lists, draw: draw, sel: sel, gps: gps, ruler: ruler, ML: ML, showPanel: showPanel, hitAt: hitAt };
+  window.MAPM = { view: view, lists: lists, draw: draw, sel: sel, gps: gps, ruler: ruler, los: los, ML: ML, showPanel: showPanel, hitAt: hitAt };
 })();
