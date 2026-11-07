@@ -18,8 +18,8 @@
    ===================================================================== */
 (function(root){
   const ROT_START = 8 * Math.PI / 180, TAP_PX = 10, TAP_MS = 500;
-  // Kantsvep, justera har: zonens bredd, px per zoomniva, px per grad.
-  const EDGE_PX = 30, ZOOM_PX = 80, ROT_PX = 2.5;
+  // Kantsvep, justera har: zonens bredd, fri marginal ovanfor iPhones home bar, px per zoomniva, px per grad.
+  const EDGE_PX = 30, BOTTOM_PX = 10, ZOOM_PX = 80, ROT_PX = 2.5;
 
   function pairState(a, b){
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1,
@@ -41,10 +41,10 @@
 
   // Vilket kantsvep ar draget fran s till p? Maste ga minst dubbelt sa mycket langs kanten som tvars.
   function edgeKind(v, s, p, o){
-    if(o.edges && !o.edges()) return null;
+    if((o.edges && !o.edges()) || s.y > v.h - BOTTOM_PX) return null;
     const dx = Math.abs(p.x - s.x), dy = Math.abs(p.y - s.y);
     if(dy >= 2 * dx && s.x >= v.w - EDGE_PX && s.y >= v.h / 2) return 'zoom';
-    if(dx >= 2 * dy && s.y >= v.h - EDGE_PX && !(o.lock && o.lock().noRot)) return 'rot';
+    if(dx >= 2 * dy && s.y >= v.h - BOTTOM_PX - EDGE_PX && !(o.lock && o.lock().noRot)) return 'rot';
     return null;
   }
   // Uppat = in. Vridningen foljer fingret: kartans nederkant dras at samma hall.
