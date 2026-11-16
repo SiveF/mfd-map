@@ -28,7 +28,7 @@
     ['STOR-02', 'Listorna kunde inte läsas (filen är skadad)'],
     ['STOR-03', 'Ingen pywebview-brygga: listorna sparas bara i webbläsaren'],
     ['CRD-01',  'Ogiltig koordinat i LIST - ändringen sparades inte'],
-    ['CRD-02',  'GOTO: koordinaten gick inte att tolka'],
+    ['CRD-02',  'GOTO: ingen koordinat eller ort som heter så (ortnamn kräver nät)'],
     ['LOS-01',  'LOS/HGHT: höjddata saknas för punkten (utanför täckning eller offline)'],
     ['LOS-02',  'LOS: träd- eller byggnadsdata kunde inte hämtas - sikten räknades utan dem'],
     ['EXP-01',  'EXPT: kunde inte skicka till telefonen'],

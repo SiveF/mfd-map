@@ -39,7 +39,7 @@
 
     document.addEventListener('keydown', function(ev){
       if(ev.key === 'Escape' && a){ a = null; view.redraw(); return; }
-      if(ev.key.toLowerCase() !== key || ev.repeat || !view.pointer) return;
+      if(ev.key.toLowerCase() !== key || ev.repeat || ev.ctrlKey || !view.pointer) return;   // CTRL+Z = angra
       a = { x: view.pointer.x, y: view.pointer.y };
       view.redraw();
     });

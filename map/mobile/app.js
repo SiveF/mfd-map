@@ -94,14 +94,10 @@
   const bases = S.bases.map(function(g){ return { head: g.head, maps: g.maps.filter(function(m){ return !m.vector; }).map(function(m){
     return m.id === 'etopo' ? Object.assign({}, m, { short: 'TOPO', attribution: m.attribution + ', ' + DEM_CREDIT }) : m;
   }) }; }).filter(function(g){ return g.maps.length; });
-  const MAPS = {}, baseLayers = {};
-  bases.forEach(function(g){ g.maps.forEach(function(m){
-    MAPS[m.id] = m;
-    baseLayers[m.id] = m.dem
-      ? [view.addLayer(MapLayers.dem(Object.assign({ id: m.id, mode: m.dem, visible: false, attribution: m.attribution,
-                                                     light: rgbOf(P.white), dark: rgbOf(P.bg) }, S.dem)))]
-      : m.layers.map(function(src, i){ return view.addLayer(MapLayers.tile(Object.assign({ id: m.id + i, visible: false, attribution: m.attribution }, src))); });
-  }); });
+  const MAPS = {};
+  bases.forEach(function(g){ g.maps.forEach(function(m){ MAPS[m.id] = m; }); });
+  const baseLayers = MapLayers.bases(view, MAPS, S.dem, rgbOf(P.white), rgbOf(P.bg));
+  const tileStatus = MapLayers.tileStatus(MapDiag, function(l){ const m = MAPS[l.id.replace(/\d+$/, '')]; return m ? m.short : l.id; });
   if(!MAPS[base]) base = 'strt';
   // Svarta kurvor: datorns TOPO LINES ar vita och syns inte pa en ljus karta.
   const blk = function(a){ return 'rgba(' + rgbOf(P.bg).join(',') + ',' + a + ')'; };
@@ -289,7 +285,6 @@
     const a = MAPS[base].attribution;
     return (/Esri/.test(a) ? 'Powered by Esri · ' : '') + a + (ML.water.visible || ML.roads.visible || ML.names.visible ? ' · OpenFreeMap © OpenMapTiles © OpenStreetMap' : '');
   };
-  let lastStatus = null;
   view.onChange(function(v){
     renderHud();
     if(ruler.active()) v.pointer = crosshair();        // skarmen kan ha andrat storlek
@@ -300,22 +295,12 @@
     // Nederkantens langd i meter, tva vardesiffror.
     $('map-scale-txt').textContent = String(Number(MapScale.meters(v.zoom, v.toLonLat(v.w / 2, v.h).lat, v.w).toPrecision(2)));
     let done = 0, total = 0;
-    const off = [];
-    let noLogin = false;
     v.layers.forEach(function(l){
-      if(!l.visible) return;
-      if(l.loading){ done += l.loading.done; total += l.loading.total; }
-      if(l.status === 'OFFL') off.push(l.id);
-      if(l.status === 'NKEY') noLogin = true;
+      if(l.visible && l.loading){ done += l.loading.done; total += l.loading.total; }
     });
     $('m-load').hidden = done >= total;
     if(total) $('m-load-bar').style.width = Math.floor(done / total * 100) + '%';
-    const st = off.join(',') + (noLogin ? '|login' : '');
-    if(st !== lastStatus){
-      lastStatus = st;
-      if(off.length) MapDiag.raise('TILE-02', off.join(',')); else MapDiag.clear('TILE-02');
-      if(noLogin) MapDiag.raise('TILE-01', MAPS[base].short); else MapDiag.clear('TILE-01');
-    }
+    tileStatus(v.layers);
   });
 
   // ---- Slots: 6 i bottenmarginalen, 6 utmed vanster kant (overst forst). Utan label = tom. ----

@@ -4,6 +4,7 @@
      MapCoords.FORMATS            -> [{ id, label, short }]  (dropdownens alternativ)
      MapCoords.format(id, lat, lon) -> text, '--' utanfor formatets giltighetsomrade
      MapCoords.utm / mgrs / sweref / rt90  -> rakna sjalv
+     MapCoords.zoneOf / utmIn / utmInv     -> UTM-zon, UTM i given zon och tillbaka (MGRS-rutnatet)
      MapCoords.parseMgrs(text)    -> { lat, lon } (rutans MITT) eller null om ogiltig
      MapCoords.sections(id, lat, lon) -> [text, ...] (en ruta per sektion) eller null
      MapCoords.parse(id, [text, ...]) -> { lat, lon } eller null (ogiltig inmatning)
@@ -67,9 +68,9 @@
 
   const BANDS = 'CDEFGHJKLMNPQRSTUVWXX';      // 8 graders band fran 80 S (X = 72-84 N)
 
-  // UTM (WGS84) med Norge- och Svalbard-undantagen. null utanfor 80 S - 84 N.
-  function utm(lat, lon){
-    if(lat < -80 || lat > 84) return null;
+  // UTM-zonen for en punkt, med Norge- och Svalbard-undantagen. 0 utanfor 80 S - 84 N.
+  function zoneOf(lat, lon){
+    if(lat < -80 || lat > 84) return 0;
     lon = ((lon + 180) % 360 + 360) % 360 - 180;
     let zone = Math.floor((lon + 180) / 6) + 1;
     if(lat >= 56 && lat < 64 && lon >= 3 && lon < 12) zone = 32;
@@ -77,9 +78,20 @@
       if(lon >= 0 && lon < 9) zone = 31; else if(lon >= 9 && lon < 21) zone = 33;
       else if(lon >= 21 && lon < 33) zone = 35; else if(lon >= 33 && lon < 42) zone = 37;
     }
-    const r = tm(lat, lon, zone * 6 - 183, 0.9996, lat < 0 ? 10000000 : 0, 500000, WGS84);
+    return Math.min(zone, 60);
+  }
+
+  // UTM (WGS84). null utanfor 80 S - 84 N.
+  function utm(lat, lon){
+    const zone = zoneOf(lat, lon);
+    if(!zone) return null;
+    const r = tm(lat, ((lon + 180) % 360 + 360) % 360 - 180, zone * 6 - 183, 0.9996, lat < 0 ? 10000000 : 0, 500000, WGS84);
     return { zone: zone, band: BANDS[Math.floor((lat + 80) / 8)], e: r.e, n: r.n };
   }
+
+  // UTM i en GIVEN zon (aven utanfor zonens remsa - rutnatet behover det) och tillbaka.
+  function utmIn(zone, south, lat, lon){ return tm(lat, lon, zone * 6 - 183, 0.9996, south ? 10000000 : 0, 500000, WGS84); }
+  function utmInv(zone, south, e, n){ return tmInv(n, e, zone * 6 - 183, 0.9996, south ? 10000000 : 0, 500000, WGS84); }
 
   // MGRS (AA-schemat, WGS84). digits = 4 (10 m) eller 5 (1 m). Siffrorna trunkeras, inte avrundas.
   const COLS = ['ABCDEFGH', 'JKLMNPQR', 'STUVWXYZ'], ROWS = 'ABCDEFGHJKLMNPQRSTUV';
@@ -295,5 +307,6 @@
 
   root.MapCoords = { FORMATS: FORMATS.map(function(f){ return { id: f.id, label: f.label, short: f.short }; }),
                      format: format, sections: sections, parse: parse, parseAny: parseAny, inverse: inverse,
-                     utm: utm, mgrs: mgrs, parseMgrs: parseMgrs, sweref: sweref, swerefInv: swerefInv, rt90: rt90 };
+                     utm: utm, zoneOf: zoneOf, utmIn: utmIn, utmInv: utmInv,
+                     mgrs: mgrs, parseMgrs: parseMgrs, sweref: sweref, swerefInv: swerefInv, rt90: rt90 };
 })(typeof window !== 'undefined' ? window : globalThis);

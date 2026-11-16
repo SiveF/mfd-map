@@ -605,5 +605,122 @@
     return L;
   }
 
-  root.MapLayers = { limits: limits, image: imageLayer, tile: tileLayer, vector: vectorLayer, cached: cachedLayer, dem: demLayer, grid: gridLayer };
+  // MGRS/UTM-rutnat (WGS84): linjer med konstant easting/northing, 100 m - 100 km efter zoom (minst
+  // MIN_PX mellan linjerna). Varje synlig zon ritas for sig och klipps exakt dar zonen slutar
+  // (MapCoords.zoneOf, sa Norge-undantaget 32V stammer). Var tionde linje ar kraftigare. Siffrorna =
+  // km (100 m-rutnat: hektometer) inom 100 km-rutan, dar linjen kommer in i bild; 10/100 km-rutnat
+  // visar ocksa 100 km-rutornas namn (33V VD). Ritas med vridna toScreen: texten star uppratt.
+  // ponytail: halvklotet tas fran kartans mitt - fel om ekvatorn syns; zonen 1/60 vid datumgransen ritas inte.
+  function mgrsLayer(style){
+    const s = style || {}, RAD = Math.PI / 180, MIN_PX = 70, N = 24;
+    const L = { id: s.id || 'mgrs', visible: s.visible !== false, status: '' };
+    L.draw = function(ctx, view){
+      const C = root.MapCoords;
+      const mid = view.toLonLat(view.w / 2, view.h / 2);
+      const mpp = 40075016.686 * Math.cos(mid.lat * RAD) / (256 * Math.pow(2, view.zoom));   // m per px
+      const step = [100, 1000, 10000, 100000].find(function(st){ return st / mpp >= MIN_PX; });
+      if(!step || !C || Math.abs(mid.lat) > 80) return;
+      const south = mid.lat < 0;
+      const edge = [];                                   // skarmkanten, 4 punkter per sida
+      for(let i = 0; i < 4; i++){
+        const t = i / 4;
+        edge.push([t * view.w, 0], [view.w, t * view.h], [view.w - t * view.w, view.h], [0, view.h - t * view.h]);
+      }
+      const ll = edge.map(function(p){ return view.toLonLat(p[0], p[1]); });
+      const lons = ll.map(function(p){ return p.lon; });
+      const z0 = Math.floor((Math.min.apply(null, lons) + 180) / 6), z1 = Math.floor((Math.max.apply(null, lons) + 180) / 6) + 2;
+      const lines = new Path2D(), index = new Path2D(), labels = [];
+      const inset = 14;
+      const onScreen = function(p){ return p.x >= inset && p.y >= inset && p.x <= view.w - inset && p.y <= view.h - inset; };
+      for(let z = Math.max(1, z0); z <= Math.min(60, z1); z++){
+        const inZone = function(p){ return C.zoneOf(p.lat, p.lon) === z; };
+        const pts = ll.map(function(p){ return C.utmIn(z, south, p.lat, p.lon); });
+        const es = pts.map(function(p){ return p.e; }), ns = pts.map(function(p){ return p.n; });
+        const e0 = Math.floor(Math.min.apply(null, es) / step) * step, e1 = Math.max.apply(null, es);
+        const n0 = Math.floor(Math.min.apply(null, ns) / step) * step, n1 = Math.max.apply(null, ns);
+        if((e1 - e0) / step > 400 || (n1 - n0) / step > 400) continue;     // zonen langt utanfor
+        // En linje: N delar, punkter utanfor zonen klipps bort (gransen hittas genom halvering).
+        const line = function(at, v){
+          const path = v % (step * 10) === 0 && step < 100000 ? index : lines;
+          let prevIn = false, labeled = false;
+          for(let i = 0; i <= N; i++){
+            const t = i / N, g = at(t), p = C.utmInv(z, south, g.e, g.n), inside = inZone(p);
+            if(i && inside !== prevIn){
+              let a = (i - 1) / N, b = t;                // a = sidan som ar "prevIn"
+              for(let k = 0; k < 12; k++){
+                const m = (a + b) / 2, gm = at(m);
+                if(inZone(C.utmInv(z, south, gm.e, gm.n)) === prevIn) a = m; else b = m;
+              }
+              const gb = at(prevIn ? a : b), pb = C.utmInv(z, south, gb.e, gb.n), sb = view.toScreen(pb.lon, pb.lat);
+              if(prevIn) path.lineTo(sb.x, sb.y); else path.moveTo(sb.x, sb.y);
+            }
+            const sp = view.toScreen(p.lon, p.lat);
+            if(inside){
+              if(prevIn) path.lineTo(sp.x, sp.y); else if(!i) path.moveTo(sp.x, sp.y);
+              if(!labeled && step < 100000 && onScreen(sp)){ labeled = true; labels.push([sp.x, sp.y, v]); }   // 100 km: bara rutnamnen
+            }
+            prevIn = inside;
+          }
+        };
+        for(let e = e0; e <= e1; e += step) line(function(t){ return { e: e, n: n0 + t * (n1 - n0) }; }, e);
+        for(let n = n0; n <= n1; n += step) line(function(t){ return { e: e0 + t * (e1 - e0), n: n }; }, n);
+        if(step >= 10000){                              // 100 km-rutornas namn i deras mitt
+          for(let e = Math.floor(e0 / 1e5) * 1e5 + 5e4; e <= e1; e += 1e5){
+            for(let n = Math.floor(n0 / 1e5) * 1e5 + 5e4; n <= n1; n += 1e5){
+              const p = C.utmInv(z, south, e, n), sp = view.toScreen(p.lon, p.lat);
+              if(inZone(p) && onScreen(sp)) labels.push([sp.x, sp.y, C.mgrs(p.lat, p.lon, 1).split(' ').slice(0, 2).join(' '), true]);
+            }
+          }
+        }
+      }
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = s.stroke; ctx.stroke(lines);
+      ctx.strokeStyle = s.index; ctx.stroke(index);
+      ctx.font = '15px ViperDisplay'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      ctx.lineWidth = 3; ctx.strokeStyle = s.outline; ctx.fillStyle = s.label;
+      labels.forEach(function(l){
+        const t = l[3] ? l[2] : step === 100 ? String(Math.round(l[2] % 1e5 / 100)).padStart(3, '0')
+                                             : String(Math.round(l[2] % 1e5 / 1000)).padStart(2, '0');
+        ctx.strokeText(t, l[0], l[1]); ctx.fillText(t, l[0], l[1]);
+      });
+    };
+    return L;
+  }
+
+  // Baskartorna (sources.js bases, som id -> karta) som dolda lager: id -> [lager]. Delas av dator
+  // och telefon. dem = hojddatans installningar; light/dark = palettens vitt/svart som [r,g,b].
+  function baseLayers(view, maps, dem, light, dark){
+    const out = {};
+    Object.keys(maps).forEach(function(id){
+      const m = maps[id];
+      out[id] = m.dem
+        ? [view.addLayer(demLayer(Object.assign({ id: id, mode: m.dem, visible: false, attribution: m.attribution,
+                                                light: light, dark: dark }, dem)))]
+        : (m.layers || []).map(function(src, i){
+          return view.addLayer(tileLayer(Object.assign({ id: id + i, visible: false, attribution: m.attribution }, src)));
+        });
+    });
+    return out;
+  }
+
+  // Synliga lagers status -> DIAG: NKEY = TILE-01 (inloggning), OFFL = TILE-02. Visas aldrig pa kartan.
+  // Returnerar en funktion att kalla vid varje andring; name(lager) = texten i DIAG.
+  function tileStatus(diag, name){
+    let last = null;
+    return function(layers){
+      const bad = { NKEY: [], OFFL: [] };
+      layers.forEach(function(l){
+        const n = l.visible && bad[l.status] && name(l);
+        if(n && bad[l.status].indexOf(n) < 0) bad[l.status].push(n);
+      });
+      const st = JSON.stringify(bad);
+      if(st === last) return;
+      last = st;
+      if(bad.NKEY.length) diag.raise('TILE-01', bad.NKEY.join(', ')); else diag.clear('TILE-01');
+      if(bad.OFFL.length) diag.raise('TILE-02', bad.OFFL.join(', ')); else diag.clear('TILE-02');
+    };
+  }
+
+  root.MapLayers = { limits: limits, image: imageLayer, tile: tileLayer, vector: vectorLayer, cached: cachedLayer, dem: demLayer, grid: gridLayer, mgrs: mgrsLayer,
+                     bases: baseLayers, tileStatus: tileStatus };
 })(typeof window !== 'undefined' ? window : globalThis);

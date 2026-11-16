@@ -197,13 +197,14 @@
       canvas.classList.add('dragging');
     });
     canvas.addEventListener('auxclick', function(ev){ if(ev.button === 1) ev.preventDefault(); });
-    canvas.addEventListener('mousemove', function(ev){
+    const move = function(ev){
       const p = xy(ev);
       v.pointer = p;
       if(grab){ grab.move(p, ev); v.redraw(); }
       else if(drag){ v.panBy(p.x - drag.x, p.y - drag.y); drag = p; }
       else v.redraw();
-    });
+    };
+    canvas.addEventListener('mousemove', function(ev){ if(!drag && !grab) move(ev); });
     canvas.addEventListener('click', function(ev){
       const p = xy(ev);
       if(down && Math.abs(p.x - down.x) < 4 && Math.abs(p.y - down.y) < 4) clickers.forEach(function(cb){ cb(p, ev); });
@@ -216,8 +217,12 @@
       if(o.wheel) o.wheel(v, dir, p.x, p.y); else v.zoomBy(dir * 0.5, p.x, p.y);
     }, { passive: false });
     if(typeof window !== 'undefined' && window.addEventListener){
+      // Ett pagaende drag foljer musen aven over fonster och knappar (de ligger ovanpa canvasen).
+      window.addEventListener('mousemove', function(ev){ if(drag || grab) move(ev); });
       window.addEventListener('mouseup', function(ev){
+        const was = drag || grab;
         if(grab){ const g = grab; grab = null; g.up(v.pointer || xy(ev), ev); v.redraw(); }
+        if(was && ev.target !== canvas){ v.pointer = null; v.redraw(); }   // draget slapptes utanfor kartan
         drag = null; canvas.classList.remove('dragging');
       });
     }

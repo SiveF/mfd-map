@@ -84,15 +84,15 @@
 
     // Alla andringar: ogonblicksbild for angra -> andring -> spara -> rita om.
     function checkpoint(){
-      undoS.push(JSON.stringify(state));
+      undoS.push({ s: JSON.stringify(state), t: Date.now() });
       if(undoS.length > HISTORY) undoS.shift();
       redoS = [];
     }
     function commit(fn){ checkpoint(); fn(); save(); changed(); }
     function restore(from, to){
       if(!from.length) return;
-      to.push(JSON.stringify(state));
-      state = JSON.parse(from.pop());
+      to.push({ s: JSON.stringify(state), t: Date.now() });
+      state = JSON.parse(from.pop().s);
       edit = null; cur = null;                         // objekten ar nya
       save(); changed();
     }
@@ -551,6 +551,9 @@
       redo: function(){ restore(redoS, undoS); },
       canUndo: function(){ return undoS.length > 0; },
       canRedo: function(){ return redoS.length > 0; },
+      // Nar det senaste steget lades (CTRL+Z i app.js valjer mellan listor och figurer).
+      undoAt: function(){ return undoS.length ? undoS[undoS.length - 1].t : 0; },
+      redoAt: function(){ return redoS.length ? redoS[redoS.length - 1].t : 0; },
       state: function(){ return state; },
     };
     return api;

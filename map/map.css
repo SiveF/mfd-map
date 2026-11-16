@@ -261,3 +261,15 @@ body.map-mode .osb .lbl svg{ display:block; transform:translateY(8px); }
 .lm-login > div:last-child{ display:flex; gap:8px; align-items:center; margin-top:6px; }
 .sync-code{ flex:1 1 0; min-width:0; user-select:text; -webkit-user-select:text; cursor:text; }
 .lm-inp{ flex:1 1 0; min-width:0; caret-color:var(--c-white); padding:4px 6px; border:1px solid var(--c-white); }
+
+/* PRNT (app.js printMap): bara utskriftsarket, svart pa vitt under kartan. Pa skarmen syns det aldrig. */
+#print-sheet{ display:none; }
+@media print{
+  @page{ size:A4 landscape; margin:8mm; }
+  html, body, body.map-mode{ width:auto; height:auto; overflow:visible; background:var(--c-white); }
+  body > *:not(#print-sheet){ display:none !important; }
+  #print-sheet{ display:block; color:var(--bg); font-family:ViperDisplay, monospace; }
+  #print-sheet canvas{ display:block; width:100%; height:auto; border:0.3mm solid var(--bg); }
+  #print-sheet .print-info{ margin-top:2mm; font-size:11pt; white-space:pre; }
+  #print-sheet .print-src{ margin-top:1mm; font-size:7pt; }
+}

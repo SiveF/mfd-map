@@ -190,8 +190,26 @@
     const store = MapStore('lists');
     function save(){ store.save(JSON.stringify(state)); }
     function load(){ store.load(accept); }
-    // Alla andringar gar har: andring -> spara -> rita om.
-    function mutate(fn){ fn(); save(); changed(); }
+    // Alla andringar gar har: ogonblicksbild for angra -> andring -> spara -> rita om.
+    let undoS = [], redoS = [];                    // { s: state som JSON, t: nar }
+    function mutate(fn){
+      undoS.push({ s: JSON.stringify(state), t: Date.now() });
+      if(undoS.length > 50) undoS.shift();
+      redoS = [];
+      fn(); save(); changed();
+    }
+    // Objekten blir nya -> valet nollas. Aktiv lista ar kvar om den finns i det aterstallda.
+    function restore(from, to){
+      if(!from.length) return;
+      const cur = current();
+      to.push({ s: JSON.stringify(state), t: Date.now() });
+      state = JSON.parse(from.pop().s);
+      const i = cur ? state.lists.findIndex(function(l){ return l.id === cur.id; }) : -1;
+      if(i >= 0) state.active = i;
+      save();
+      if(sel) select(null); else changed();
+    }
+    const topAt = function(st){ return st.length ? st[st.length - 1].t : 0; };
 
     function add(lat, lon, fmt){
       let pt;
@@ -414,6 +432,11 @@
         });
       },
       state: function(){ return state; },
+      // ANGRA / GOR OM (CTRL+Z / CTRL+Y i app.js). undoAt/redoAt = nar det senaste steget lades.
+      undo: function(){ restore(undoS, redoS); },
+      redo: function(){ restore(redoS, undoS); },
+      undoAt: function(){ return topAt(undoS); },
+      redoAt: function(){ return topAt(redoS); },
     };
   }
 
