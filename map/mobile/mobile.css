@@ -49,7 +49,7 @@ input{ -webkit-user-select:text; user-select:text; }
 .m-slot{ appearance:none; -webkit-appearance:none; position:relative; font:inherit; font-size:13px; letter-spacing:1px; line-height:1;
          color:var(--green); background:none; border:0; padding:4px 0 0; min-width:0; touch-action:none;
          display:flex; justify-content:center; align-items:flex-start; }
-.m-slot::after{ content:''; position:absolute; inset:-30px 0 0; }
+.m-slot::after{ content:''; position:absolute; inset:-42px 0 0; }
 .m-slot span{ padding:1px 3px; border:1px solid transparent; }
 .m-slot.on span{ background:var(--c-white); color:var(--bg); }
 .m-slot.current span{ border-color:var(--c-white); background:rgba(var(--green-rgb),.13); }
@@ -62,7 +62,7 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-side{ position:absolute; z-index:3; left:var(--sa-l); top:calc(70px + var(--m-center-h) + var(--sa-t)); bottom:36px; width:44px;
          display:flex; flex-direction:column; pointer-events:none; }
 #m-side .m-slot{ flex:1; min-height:0; pointer-events:auto; align-items:center; justify-content:flex-start; padding:0 0 0 2px; touch-action:none; }
-#m-side .m-slot::after{ inset:0; }
+#m-side .m-slot::after{ inset:0 -18px 0 0; }   /* traffytan nar 18 px in over kartan */
 #m-side span{ writing-mode:vertical-rl; text-orientation:upright; letter-spacing:0; padding:3px 1px;
              -webkit-text-stroke:2.5px var(--bg); paint-order:stroke fill; }
 #m-side .m-slot.on span{ background:var(--c-white); -webkit-text-stroke:0; }
