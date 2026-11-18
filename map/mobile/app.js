@@ -112,6 +112,18 @@
 
   const vt = MapVT(S.vtiles.tilejson, S.vtiles.maxZoom, VT_TILES);
   const ML = MapMarks.mapLayers(vt, P, S.dem, function(){ return null; });   // kurvor: AUTO efter zoom
+  // Datorns ovriga lager i samma ordning (map/app.js). TOPO 3D och TREES under vattnet.
+  const tint = P.tint, greenA = function(a){ return 'rgba(' + rgbOf(P.green).join(',') + ',' + a + ')'; };
+  const topo3d = view.addLayer(MapLayers.dem(Object.assign({ id: 'topo3d', mode: 'shade', visible: false,
+    light: rgbOf(P.white), dark: rgbOf(P.bg) }, S.dem)));
+  // BORDERS: datorn laser Natural Earth ur map/data/ (publiceras aldrig) - har OpenFreeMaps granser.
+  const borders = MapLayers.vtLines(vt, { id: 'borders', layer: 'boundary', visible: false,
+    styles: function(p){ return p.maritime ? null : p.admin_level <= 2 ? 'land' : p.admin_level <= 4 ? 'region' : null; },
+    style: { land: { stroke: tint(.75), width: 1.5 }, region: { stroke: tint(.28), width: 1 } } });
+  const bordersC = view.addLayer(MapLayers.cached([borders], { id: 'bordersC' }));
+  const trees = MapLayers.vtLines(vt, { id: 'trees', layer: 'landcover', visible: false,
+    styles: function(p){ return p.class === 'wood' ? 'wood' : null; }, style: { wood: { fill: greenA(.16) } } });
+  const treesC = view.addLayer(MapLayers.cached([trees], { id: 'treesC' }));
   const waterC = view.addLayer(MapLayers.cached([ML.water], { id: 'waterC' }));
   // LOS: det som syns fran punkten = gul overlagg (map/terrain.js), samma varden som datorn utom
   // start 750 m och taket: maxTiles 5 (datorn 11), iOS stanger sidan om den tar for mycket minne.
@@ -128,14 +140,21 @@
     } });
   view.addLayer(ML.topoLines);
   const roadsC = view.addLayer(MapLayers.cached([ML.roads], { id: 'roadsC' }));
+  const grid = view.addLayer(MapLayers.grid({ id: 'grid', stroke: tint(.22), visible: false }));
+  const mgrs = view.addLayer(MapLayers.mgrs({ id: 'mgrs', stroke: tint(.3), index: tint(.6), label: P.white, outline: P.bg, visible: false }));
   view.addLayer(ML.names);
   const OVERLAYS = {
     names:     { label: 'NAME', l: ML.names, set: function(v){ ML.names.visible = v; } },
     roads:     { label: 'ROAD', l: ML.roads, set: function(v){ ML.roads.visible = v; roadsC.invalidate(); } },
     water:     { label: 'WATR', l: ML.water, set: function(v){ ML.water.visible = v; waterC.invalidate(); } },
     topolines: { label: 'TOPO', l: ML.topoLines, set: function(v){ ML.topoLines.visible = v; } },
+    topo3d:    { label: '3D',   l: topo3d, set: function(v){ topo3d.visible = v; } },
+    borders:   { label: 'BRDR', l: borders, set: function(v){ borders.visible = v; bordersC.invalidate(); } },
+    trees:     { label: 'TREE', l: trees, set: function(v){ trees.visible = v; treesC.invalidate(); } },
+    grid:      { label: 'GRID', l: grid, set: function(v){ grid.visible = v; } },
+    mgrs:      { label: 'MGRS', l: mgrs, set: function(v){ mgrs.visible = v; } },
   };
-  const ovOn = ui.ov || { names: true, roads: true, water: true, topolines: false };
+  const ovOn = ui.ov || { names: true, roads: true, water: true, borders: true };
   Object.keys(OVERLAYS).forEach(function(k){ OVERLAYS[k].set(!!ovOn[k]); });
 
   let lists = null;
@@ -283,7 +302,7 @@
   // Kartleverantorer och krediter, visas pa MAP-sidan.
   const credits = function(){
     const a = MAPS[base].attribution;
-    return (/Esri/.test(a) ? 'Powered by Esri · ' : '') + a + (ML.water.visible || ML.roads.visible || ML.names.visible ? ' · OpenFreeMap © OpenMapTiles © OpenStreetMap' : '');
+    return (/Esri/.test(a) ? 'Powered by Esri · ' : '') + a + (ML.water.visible || ML.roads.visible || ML.names.visible || borders.visible || trees.visible ? ' · OpenFreeMap © OpenMapTiles © OpenStreetMap' : '');
   };
   view.onChange(function(v){
     renderHud();
