@@ -165,7 +165,7 @@
     lists: function(){ return lists ? lists.all() : []; },
     upks: function(id){ return lists ? lists.upks(id) : []; } });
   // Harkorset i kartans mitt (koordinaten overst galler dar), utanfor det en liten vit pil mot norr
-  // och, nar kartan flyttats fran min position, ett gront streck mot positionen. 1 px svart runt allt.
+  // och, nar kartan flyttats fran min position, ett gront streck mot positionen och en bla pil mot aktiva punkten. 1 px svart runt allt.
   view.addLayer({ id: 'center', visible: true, status: '', draw: function(ctx, v){
     if(draw.sketching()) return;
     const x = v.w / 2, y = v.h / 2, g = gps.pos();
@@ -182,6 +182,16 @@
       ctx.save();
       ctx.rotate(Math.atan2(s.x - x, y - s.y));
       bar(24, 38, 2, P.green);
+      ctx.restore();
+    }
+    // Aktiva punkten utanfor harkorset: liten bla pil at dess hall (samma bla som i texten overst).
+    const a = sel.get(), t = a && v.toScreen(a.lon, a.lat);
+    if(t && Math.hypot(t.x - x, t.y - y) > 38){
+      ctx.save();
+      ctx.rotate(Math.atan2(t.x - x, y - t.y));
+      ctx.beginPath(); ctx.moveTo(0, -36); ctx.lineTo(4, -27); ctx.lineTo(-4, -27); ctx.closePath();
+      ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = P.bg; ctx.stroke();
+      ctx.fillStyle = P.blue; ctx.fill();
       ctx.restore();
     }
     ctx.rotate(v.rot);

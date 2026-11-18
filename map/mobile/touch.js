@@ -19,7 +19,7 @@
 (function(root){
   const ROT_START = 8 * Math.PI / 180, TAP_PX = 10, TAP_MS = 500;
   // Kantsvep, justera har: zonens bredd, fri marginal ovanfor iPhones home bar, px per zoomniva, px per grad.
-  const EDGE_PX = 30, BOTTOM_PX = 10, ZOOM_PX = 80, ROT_PX = 2.5;
+  const EDGE_PX = 45, BOTTOM_PX = 10, ZOOM_PX = 80, ROT_PX = 2.5;
 
   function pairState(a, b){
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1,
