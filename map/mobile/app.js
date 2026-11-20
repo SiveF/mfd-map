@@ -687,6 +687,16 @@
   }
   document.addEventListener('visibilitychange', function(){ if(document.hidden) saveUi(); else pull(); });
   window.addEventListener('pagehide', saveUi);
+  // Skarmen slacks inte medan appen syns (Wake Lock, iOS 16.4+, i hemskarmsappen 18.4+).
+  // Laset slapps av iOS nar sidan doljs: be om det igen nar den syns och vid tryck.
+  let wake = null;
+  const keepAwake = function(){
+    if(!navigator.wakeLock || document.hidden || (wake && !wake.released)) return;
+    navigator.wakeLock.request('screen').then(function(w){ wake = w; }).catch(function(){});
+  };
+  keepAwake();
+  document.addEventListener('visibilitychange', keepAwake);
+  document.addEventListener('touchend', keepAwake, { passive: true });
 
   // ---- Start ----
   applyBase();
