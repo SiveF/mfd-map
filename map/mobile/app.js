@@ -87,24 +87,16 @@
   applyScreen();
   window.addEventListener('resize', applyScreen);
 
-  // Baskartorna utan VECT - den kraver Natural Earth-datan (6-9 MB).
-  // Esri Topo saknar hojdkurvor i Sverige: hette ETOP, blir TOPO med egna kurvor (topoC nedan).
-  // Till skillnad fran OTM ritar den inte ovningsfalt i rott.
-  const DEM_CREDIT = '© Mapterhorn, Lantmäteriet (laserdata)';
-  const bases = S.bases.map(function(g){ return { head: g.head, maps: g.maps.filter(function(m){ return !m.vector; }).map(function(m){
-    return m.id === 'etopo' ? Object.assign({}, m, { short: 'TOPO', attribution: m.attribution + ', ' + DEM_CREDIT }) : m;
-  }) }; }).filter(function(g){ return g.maps.length; });
+  // Telefonen har bara Lantmateriet (LM, LMGR), SAT och STRT - datorn har alla.
+  const PHONE_BASES = ['lm', 'lmgr', 'sat', 'strt'];
+  const bases = S.bases.map(function(g){ return { head: g.head, maps: g.maps.filter(function(m){ return PHONE_BASES.indexOf(m.id) >= 0; }) }; })
+    .filter(function(g){ return g.maps.length; });
   const MAPS = {};
   bases.forEach(function(g){ g.maps.forEach(function(m){ MAPS[m.id] = m; }); });
   const baseLayers = MapLayers.bases(view, MAPS, S.dem, rgbOf(P.white), rgbOf(P.bg));
   const tileStatus = MapLayers.tileStatus(MapDiag, function(l){ const m = MAPS[l.id.replace(/\d+$/, '')]; return m ? m.short : l.id; });
   if(!MAPS[base]) base = 'strt';
-  // Svarta kurvor: datorns TOPO LINES ar vita och syns inte pa en ljus karta.
-  const blk = function(a){ return 'rgba(' + rgbOf(P.bg).join(',') + ',' + a + ')'; };
-  const topoC = view.addLayer(MapLayers.dem(Object.assign({ id: 'topoC', mode: 'contour', visible: false, step: function(){ return null; },
-    line: blk(.35), index: blk(.7), label: blk(.9), outline: P.white }, S.dem)));
   function applyBase(){
-    topoC.visible = base === 'etopo';
     const d = MAPS[base].dem ? 1 : 0.06 + (dim - 1) / 9 * 0.94;   // alla rasterkartor
     Object.keys(baseLayers).forEach(function(id){ baseLayers[id].forEach(function(l){ l.visible = id === base; l.dim = d; }); });
     view.redraw();
@@ -462,7 +454,7 @@
       if(!l.gpkg) out.push(MapOffline.raster(l));
       else if(MapGpkg(l.gpkg).ready()) out.push(MapOffline.gpkg(l.gpkg, l.maxZoom));
     });
-    if(m.dem || base === 'etopo' || topo3d.visible || ML.topoLines.visible) out.push(MapOffline.dem(S.dem.url, S.dem.maxZoom));
+    if(m.dem || topo3d.visible || ML.topoLines.visible) out.push(MapOffline.dem(S.dem.url, S.dem.maxZoom));
     if([ML.names, ML.roads, ML.water, borders, trees].some(function(l){ return l.visible; })) out.push(MapOffline.vt(S.vtiles.tilejson, S.vtiles.maxZoom));
     return Promise.all(out);
   }
