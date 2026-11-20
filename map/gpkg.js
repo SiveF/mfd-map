@@ -271,6 +271,7 @@
   }
 
   // Rutor sparade pa enheten. Allt har far misslyckas: da hamtas rutan fran natet.
+  // Letar i alla cachar: telefonens OFFL (mobile/offline.js) sparar under samma nyckel.
   // ponytail: rensningen ar FIFO, inte senast anvand. Rakna om nar sparade omraden forsvinner.
   function onDisk(url, rd, fetchTile){
     const name = url.split('/').pop(), prefix = '/lm-tiles/' + name + '/', meta = '/lm-meta/' + name;
@@ -293,7 +294,7 @@
     return function(z, x, y){
       const key = prefix + z + '/' + x + '/' + y;
       return store.then(function(c){
-        return (c ? c.match(key).catch(function(){ return null; }) : Promise.resolve(null)).then(function(hit){
+        return (c ? root.caches.match(key).catch(function(){ return null; }) : Promise.resolve(null)).then(function(hit){
           if(hit) return hit.blob();
           return fetchTile(z, x, y).then(function(b){
             if(c && !checked && rd.changed) checkVersion(c);

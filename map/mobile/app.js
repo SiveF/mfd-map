@@ -276,15 +276,17 @@
 
   MapTouch(view, {
     tap: function(p){
-      if(draw.sketching()) return;
+      if(draw.sketching() || offl) return;
       if(ruler.active()) ruler.click(crosshair()); else pick(p);
     },
-    grab: function(p){ return draw.sketching() || ruler.active() || los.active() ? view.grabAt(p) : null; },
+    grab: function(p){
+      if(offl) return offl.job ? null : offlGrab(p);
+      return draw.sketching() || ruler.active() || los.active() ? view.grabAt(p) : null; },
     moved: release,
     lock: function(){ return { noRot: ori !== 'free', noPan: ori === 'gps' }; },
     local: function(x, y){ return MapTouch.unturn(turn, window.innerWidth, window.innerHeight, x, y); },
     bar: $('m-bar'),
-    edges: function(){ return !panel && !draw.sketching(); },
+    edges: function(){ return !panel && !draw.sketching() && !offl; },
   });
 
   // ---- Overst, kompass, skala, laddning ----
@@ -431,6 +433,67 @@
   setInterval(refreshBar, 1000);                       // tiden sedan senaste fix
   MapDiag.onChange(function(){ refreshBar(); if(panel === 'diag') renderPanel(); });
 
+  // ---- OFFL: rita en rektangel, rutorna i den sparas for kartan utan nat (mobile/offline.js) ----
+  // Baskartan + de lager som ar pa, niva 0 och sa djupt som ryms under taket.
+  const OFFL_CAP = 5000;                               // rutor per rektangel, ~100-200 MB
+  let offl = null;                                     // { a, b: hornen (lon/lat), job }
+  const offlText = function(t){ $('m-offl').textContent = t; $('m-offl').hidden = !t; };
+  const cncl = document.createElement('button');
+  cncl.id = 'm-cncl'; cncl.className = 'm-slot';
+  cncl.appendChild(document.createElement('span')).textContent = 'CNCL';
+  cncl.addEventListener('click', function(){ setOffl(false); });
+  $('m-bar').appendChild(cncl);
+  function setOffl(on){
+    if(offl && offl.job) offl.job.cancel();
+    offl = on ? { a: null, b: null, job: null } : null;
+    $('m-app').classList.toggle('offl', on);
+    offlText('');
+    showPanel(on ? null : 'map');
+    view.redraw();
+  }
+  function offlGrab(p){
+    offl.a = offl.b = view.toLonLat(p.x, p.y);
+    offlText('');
+    return { move: function(q){ offl.b = view.toLonLat(q.x, q.y); }, up: offlSave };
+  }
+  function offlSources(){
+    const m = MAPS[base], out = [];
+    (m.layers || []).forEach(function(l){
+      if(!l.gpkg) out.push(MapOffline.raster(l));
+      else if(MapGpkg(l.gpkg).ready()) out.push(MapOffline.gpkg(l.gpkg, l.maxZoom));
+    });
+    if(m.dem || base === 'etopo' || topo3d.visible || ML.topoLines.visible) out.push(MapOffline.dem(S.dem.url, S.dem.maxZoom));
+    if([ML.names, ML.roads, ML.water, borders, trees].some(function(l){ return l.visible; })) out.push(MapOffline.vt(S.vtiles.tilejson, S.vtiles.maxZoom));
+    return Promise.all(out);
+  }
+  function offlSave(){
+    const o = offl, a = o.a, b = o.b;
+    const box = { w: Math.min(a.lon, b.lon), e: Math.max(a.lon, b.lon), s: Math.min(a.lat, b.lat), n: Math.max(a.lat, b.lat) };
+    offlSources().then(function(srcs){
+      if(offl !== o) return;
+      const Z = MapOffline.depth(srcs, box, OFFL_CAP);
+      // De djupaste sparade rutorna far inte bli grovre an kartan nu.
+      if(Z < Math.round(view.zoom)){ o.a = o.b = null; offlText('TOO BIG'); view.redraw(); return; }
+      o.job = MapOffline.save(srcs, box, Z, function(d, t, f){ if(offl === o) offlText('Z' + Z + '  ' + d + '/' + t + (f ? '  FAIL ' + f : '')); });
+      o.job.done.then(function(r){
+        if(offl !== o) return;
+        o.job = null;
+        offlText(r.full ? 'FULL' : r.fail ? 'FAIL ' + r.fail : 'SAVED');
+        if(!r.full && !r.fail) setTimeout(function(){ if(offl === o && !o.job) setOffl(false); }, 1500);
+      });
+    }, function(){ if(offl === o){ o.a = o.b = null; offlText('OFFLINE'); view.redraw(); } });
+  }
+  view.addLayer({ id: 'offl', visible: true, status: '', draw: function(ctx, v){
+    if(!offl || !offl.a) return;
+    const a = offl.a, b = offl.b;
+    const ps = [[a.lon, a.lat], [b.lon, a.lat], [b.lon, b.lat], [a.lon, b.lat]].map(function(q){ return v.toScreen(q[0], q[1]); });
+    ctx.save();
+    ctx.beginPath(); ps.forEach(function(p, i){ if(i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }); ctx.closePath();
+    ctx.lineWidth = 4; ctx.strokeStyle = P.bg; ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = P.white; ctx.stroke();
+    ctx.restore();
+  } });
+
   // ---- Paneler ----
   function showPanel(name){ panel = name; renderPanel(); refreshBar(); }
   function renderPanel(){
@@ -463,7 +526,9 @@
   const toggle = function(on){ return on ? 'on' : ''; };        // av/pa = vit fyllning runt texten
   const PANELS = {
     map: function(el){
-      button(rowsEl(el, 'm-grid'), 'BASE', MAPS[base].short, choice(baseOpen), function(){ baseOpen = !baseOpen; renderPanel(); });
+      const top = rowsEl(el, 'm-grid');
+      button(top, 'BASE', MAPS[base].short, choice(baseOpen), function(){ baseOpen = !baseOpen; renderPanel(); });
+      button(top, 'OFFL', '', '', function(){ setOffl(true); });
       if(baseOpen){
         const g = rowsEl(el, 'm-grid');
         bases.forEach(function(x){ x.maps.forEach(function(m){

@@ -71,6 +71,14 @@ input{ -webkit-user-select:text; user-select:text; }
 #m-app.land #m-side .m-slot{ font-size:11px; }
 #m-app.land #m-hud{ left:calc(46px + var(--sa-l)); }
 
+/* OFFL: kartan utan knappar, bara CNCL (slot 6) och status */
+#m-cncl{ display:none; }
+#m-app.offl #m-bar .m-slot, #m-app.offl #m-side{ display:none; }
+#m-app.offl #m-bar #m-cncl{ display:flex; grid-column:6; }
+#m-offl{ position:absolute; z-index:3; left:0; right:0; top:calc(70px + var(--m-center-h) + var(--sa-t)); text-align:center;
+         font-size:20px; letter-spacing:1px; pointer-events:none; -webkit-text-stroke:3px var(--bg); paint-order:stroke fill; }
+#m-offl[hidden]{ display:none; }
+
 /* Knappar i panelerna */
 .m-btn{ appearance:none; -webkit-appearance:none; font:inherit; color:var(--green); background:none; border:1px solid transparent;
         min-height:46px; min-width:0; padding:2px; font-size:17px; letter-spacing:1px; line-height:1.1;
