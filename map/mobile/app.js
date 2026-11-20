@@ -426,8 +426,9 @@
   MapDiag.onChange(function(){ refreshBar(); if(panel === 'diag') renderPanel(); });
 
   // ---- OFFL: rita en rektangel, rutorna i den sparas for kartan utan nat (mobile/offline.js) ----
-  // Baskartan + de lager som ar pa, niva 0 och sa djupt som ryms under taket.
-  const OFFL_CAP = 5000;                               // rutor per rektangel, ~100-200 MB
+  // Alla baskartor utom LMGR (LM bara med inloggning) + de lager som ar pa, niva 0 och sa djupt
+  // som ryms under taket. Taket galler per kalla, sa fler kallor gar lika djupt.
+  const OFFL_CAP = 5000, OFFL_SKIP = ['lmgr'];        // rutor per kalla och rektangel, ~100-200 MB
   let offl = null;                                     // { a, b: hornen (lon/lat), job }
   const offlText = function(t){ $('m-offl').textContent = t; $('m-offl').hidden = !t; };
   const cncl = document.createElement('button');
@@ -449,12 +450,14 @@
     return { move: function(q){ offl.b = view.toLonLat(q.x, q.y); }, up: offlSave };
   }
   function offlSources(){
-    const m = MAPS[base], out = [];
-    (m.layers || []).forEach(function(l){
-      if(!l.gpkg) out.push(MapOffline.raster(l));
-      else if(MapGpkg(l.gpkg).ready()) out.push(MapOffline.gpkg(l.gpkg, l.maxZoom));
+    const out = [];
+    Object.keys(MAPS).filter(function(id){ return OFFL_SKIP.indexOf(id) < 0; }).forEach(function(id){
+      (MAPS[id].layers || []).forEach(function(l){
+        if(!l.gpkg) out.push(MapOffline.raster(l));
+        else if(MapGpkg(l.gpkg).ready()) out.push(MapOffline.gpkg(l.gpkg, l.maxZoom));
+      });
     });
-    if(m.dem || topo3d.visible || ML.topoLines.visible) out.push(MapOffline.dem(S.dem.url, S.dem.maxZoom));
+    if(topo3d.visible || ML.topoLines.visible) out.push(MapOffline.dem(S.dem.url, S.dem.maxZoom));
     if([ML.names, ML.roads, ML.water, borders, trees].some(function(l){ return l.visible; })) out.push(MapOffline.vt(S.vtiles.tilejson, S.vtiles.maxZoom));
     return Promise.all(out);
   }
@@ -463,10 +466,10 @@
     const box = { w: Math.min(a.lon, b.lon), e: Math.max(a.lon, b.lon), s: Math.min(a.lat, b.lat), n: Math.max(a.lat, b.lat) };
     offlSources().then(function(srcs){
       if(offl !== o) return;
-      const Z = MapOffline.depth(srcs, box, OFFL_CAP);
+      const Z = MapOffline.depth(srcs, box, OFFL_CAP * srcs.length);
       // De djupaste sparade rutorna far inte bli grovre an kartan nu.
       if(Z < Math.round(view.zoom)){ o.a = o.b = null; offlText('TOO BIG'); view.redraw(); return; }
-      o.job = MapOffline.save(srcs, box, Z, function(d, t, f){ if(offl === o) offlText('Z' + Z + '  ' + d + '/' + t + (f ? '  FAIL ' + f : '')); });
+      o.job = MapOffline.save(srcs, box, Z, function(d, t){ if(offl === o) offlText('Z' + Z + '  ' + d + '/' + t); });
       o.job.done.then(function(r){
         if(offl !== o) return;
         o.job = null;
